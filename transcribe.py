@@ -1553,6 +1553,13 @@ def run_transcription_pipeline(
     if cancel_event and cancel_event.is_set():
         raise TranscriptionCancelledException("Transcription cancelled by user.")
 
+    draft_file = output_dir / f"{input_file.stem}_draft.txt"
+    if draft_file.exists():
+        try:
+            draft_file.unlink()
+        except Exception:
+            pass
+
     set_status("Splitting audio into chunks...", 0, len(segments))
     chunk_items = split_audio_into_chunks(master_audio, segments, converted_dir)
 
@@ -1583,6 +1590,13 @@ def run_transcription_pipeline(
                     log(f"[{clock_now}] Chunk {result['chunk_index']} skipped (negligible duration).")
                 else:
                     log(f"[{clock_now}] Chunk {result['chunk_index']}/{total_chunks} completed ({time_range}) [Model: {result['model_used']}]")
+                    # Silently auto-save partial raw transcript
+                    if result.get("transcript"):
+                        try:
+                            with open(draft_file, "a", encoding="utf-8") as f:
+                                f.write(f"\n--- Chunk {chunk_idx} ({time_range}) ---\n{result['transcript']}\n")
+                        except Exception as e:
+                            log(f"[Auto-Save Error] Could not save chunk {chunk_idx}: {e}")
                 
                 set_status(f"Transcribing chunks ({done_count} of {total_chunks} completed)...", done_count, total_chunks)
             except TranscriptionCancelledException:
@@ -1647,7 +1661,7 @@ def run_transcription_pipeline(
     log("=" * 60 + "\n")
     log(final_merged_transcript)
 
-    # Collect intermediate files generated for this run (master converted & chunk files)
+    # Collect intermediate files generated for this run (master converted, chunk files, and draft file)
     intermediate_files = []
     if master_audio.resolve() != input_file.resolve():
         intermediate_files.append(master_audio)
@@ -1655,6 +1669,9 @@ def run_transcription_pipeline(
         chunk_f = item[3]
         if chunk_f.resolve() != input_file.resolve() and chunk_f not in intermediate_files:
             intermediate_files.append(chunk_f)
+    
+    if draft_file.exists():
+        intermediate_files.append(draft_file)
 
     return {
         "transcript": final_merged_transcript,
