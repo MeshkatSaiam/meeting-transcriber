@@ -1,0 +1,95 @@
+[
+  {
+    "id": "20260829_013456",
+    "display_name": "2026-08-24_Falgoon-24826-Mes-Update-1_Transcript.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-24_Falgoon-24826-Mes-Update-1_Transcript.docx",
+    "date": "2026-08-29 01:34:56",
+    "source_audio": "Falgoon_24826_MES Update_1.mp3",
+    "company_name": "N/A",
+    "meeting_type": "N/A",
+    "person_names": [],
+    "topic_slug": "N/A",
+    "duration": "04:58",
+    "has_notes": false
+  },
+  {
+    "id": "20260829_012326",
+    "display_name": "2026-08-24_Mans_Client-Review_Transcript.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-24_Mans_Client-Review_Transcript.docx",
+    "date": "2026-08-29 01:23:26",
+    "source_audio": "Falgoon_24826_MES Update_1.mp3",
+    "company_name": "Mans",
+    "meeting_type": "Client-Review",
+    "person_names": [
+      "Falgoon"
+    ],
+    "topic_slug": "Water-Automation-System",
+    "duration": "04:58",
+    "has_notes": true
+  },
+  {
+    "id": "20260829_002124_1",
+    "display_name": "2026-08-24_Monitor-Setup_Technical-Discussion_Transcript.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-24_Monitor-Setup_Technical-Discussion_Transcript.docx",
+    "date": "2026-08-29 00:21:24",
+    "source_audio": "Falgoon_24826_MES Update_3.mp3",
+    "company_name": "N/A",
+    "meeting_type": "Technical-Discussion",
+    "person_names": [],
+    "topic_slug": "Monitor-Setup",
+    "duration": "00:12",
+    "has_notes": false
+  },
+  {
+    "id": "20260829_002124_2",
+    "display_name": "2026-08-24_Monitor-Setup_Technical-Discussion_Notes.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-24_Monitor-Setup_Technical-Discussion_Notes.docx",
+    "date": "2026-08-29 00:21:24",
+    "source_audio": "Falgoon_24826_MES Update_3.mp3",
+    "company_name": "N/A",
+    "meeting_type": "Technical-Discussion",
+    "person_names": [],
+    "topic_slug": "Monitor-Setup",
+    "duration": "00:12",
+    "has_notes": true
+  },
+  {
+    "id": "20260829_000913_1",
+    "display_name": "2026-08-27_Poc-And_Client-Review_Transcript.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-27_Poc-And_Client-Review_Transcript.docx",
+    "date": "2026-08-29 00:09:13",
+    "source_audio": "Hameem Group Meeting_chunk03.mp3",
+    "company_name": "N/A",
+    "meeting_type": "Client-Review",
+    "person_names": [],
+    "topic_slug": "Poc-And-Commercial",
+    "duration": "13:06",
+    "has_notes": false
+  },
+  {
+    "id": "20260829_000913_2",
+    "display_name": "2026-08-27_Poc-And_Client-Review_Notes.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-27_Poc-And_Client-Review_Notes.docx",
+    "date": "2026-08-29 00:09:13",
+    "source_audio": "Hameem Group Meeting_chunk03.mp3",
+    "company_name": "N/A",
+    "meeting_type": "Client-Review",
+    "person_names": [],
+    "topic_slug": "Poc-And-Commercial",
+    "duration": "13:06",
+    "has_notes": true
+  },
+  {
+    "id": "20260829_000218_1",
+    "display_name": "2026-08-27_Poc-Commercials_Commercial-Discussion_Transcript.docx",
+    "file_path": "C:\\Projects\\meeting-transcriber\\output\\2026-08-27_Poc-Commercials_Commercial-Discussion_Transcript.docx",
+    "date": "2026-08-29 00:02:18",
+    "source_audio": "Hameem Group Meeting_chunk03.mp3",
+    "company_name": "N/A",
+    "meeting_type": "Commercial-Discussion",
+    "person_names": [],
+    "topic_slug": "Poc-Commercials-Negotiation",
+    "duration": "13:06",
+    "has_notes": false
+  }
+]

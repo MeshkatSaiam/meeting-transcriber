@@ -1,0 +1,8 @@
+google-genai
+python-dotenv
+python-docx
+kivy
+kivymd
+sounddevice
+soundfile
+numpy

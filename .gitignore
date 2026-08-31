@@ -1,0 +1,13 @@
+.env
+converted/
+output/
+__pycache__/
+build/
+dist/
+*.pyc
+app_settings.json
+database.db
+recordings/
+*.spec
+Manual test/
+voice_samples/
