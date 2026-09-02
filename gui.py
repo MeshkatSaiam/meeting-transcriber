@@ -1380,7 +1380,7 @@ class TranscriberGUI(BoxLayout):
         middle_grid = BoxLayout(orientation="horizontal", spacing=8, size_hint_y=None, height=165)
 
         # Card 1: Capture Settings
-        card_capture = SurfaceCard(orientation="vertical", size_hint_x=0.33, padding=[10, 8, 10, 8], spacing=5)
+        card_capture = SurfaceCard(orientation="vertical", size_hint_x=0.50, padding=[10, 8, 10, 8], spacing=5)
         cap_title = Label(
             text="Capture Settings",
             font_size="12sp",
@@ -1401,8 +1401,13 @@ class TranscriberGUI(BoxLayout):
             height=28,
             font_size="11sp",
             background_color=get_color_from_hex("#121316"),
-            color=get_color_from_hex("#F9FAFB")
+            color=get_color_from_hex("#F9FAFB"),
+            shorten=True,
+            shorten_from="right",
+            halign="left",
+            valign="middle"
         )
+        self.input_device_spinner.bind(size=lambda inst, val: setattr(inst, 'text_size', (val[0]-16, val[1])))
         self.input_device_spinner.bind(text=self._on_input_device_selected)
         card_capture.add_widget(self.input_device_spinner)
 
@@ -1439,7 +1444,7 @@ class TranscriberGUI(BoxLayout):
         middle_grid.add_widget(card_capture)
 
         # Card 2: Processing Model
-        card_model = SurfaceCard(orientation="vertical", size_hint_x=0.34, padding=[10, 8, 10, 8], spacing=5)
+        card_model = SurfaceCard(orientation="vertical", size_hint_x=0.25, padding=[10, 8, 10, 8], spacing=5)
         model_hdr_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=16)
         mod_title = Label(
             text="Processing Model",
@@ -1538,7 +1543,7 @@ class TranscriberGUI(BoxLayout):
         middle_grid.add_widget(card_model)
 
         # Card 3: Voice Refs
-        card_voice = SurfaceCard(orientation="vertical", size_hint_x=0.33, padding=[10, 8, 10, 8], spacing=4)
+        card_voice = SurfaceCard(orientation="vertical", size_hint_x=0.25, padding=[10, 8, 10, 8], spacing=4)
         voice_hdr = BoxLayout(orientation="horizontal", size_hint_y=None, height=16)
         v_title = Label(
             text="Voice Refs",
@@ -3552,11 +3557,16 @@ class TranscriberGUI(BoxLayout):
             self.input_devices_map = []
             values = []
 
+            wasapi_host_idx = next((i for i, h in enumerate(hostapis) if "WASAPI" in h["name"]), None)
+
             for idx, d in enumerate(raw_devices):
                 if d.get("max_input_channels", 0) > 0:
+                    if wasapi_host_idx is not None and d["hostapi"] != wasapi_host_idx:
+                        continue
+                        
                     api_name = hostapis[d["hostapi"]]["name"]
                     dev_name = d["name"]
-                    label = f"[{idx}] {dev_name} ({api_name})"
+                    label = f"[{idx}] {dev_name}"
                     self.input_devices_map.append({
                         "index": idx,
                         "name": dev_name,
