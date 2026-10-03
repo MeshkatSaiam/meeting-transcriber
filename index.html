@@ -1,0 +1,712 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Meeting Transcriber</title>
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0F172A">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <link rel="icon" type="image/png" href="icon-192.png">
+
+  <!-- Tailwind CSS & Marked (Markdown Renderer) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <style>
+    body {
+      background-color: #0F172A;
+      color: #F8FAFC;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+    .custom-scroll::-webkit-scrollbar {
+      width: 4px;
+    }
+    .custom-scroll::-webkit-scrollbar-thumb {
+      background: #334155;
+      border-radius: 4px;
+    }
+    .markdown-content h1, .markdown-content h2, .markdown-content h3 {
+      color: #38BDF8;
+      font-weight: 700;
+      margin-top: 1rem;
+      margin-bottom: 0.5rem;
+    }
+    .markdown-content h1 { font-size: 1.25rem; }
+    .markdown-content h2 { font-size: 1.1rem; }
+    .markdown-content h3 { font-size: 1.0rem; }
+    .markdown-content ul { list-style-type: disc; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    .markdown-content ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
+    .markdown-content li { margin-bottom: 0.25rem; color: #E2E8F0; }
+    .markdown-content p { margin-bottom: 0.75rem; color: #CBD5E1; line-height: 1.6; }
+    .markdown-content strong { color: #F8FAFC; }
+  </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+  <!-- Top Header -->
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
+    <div class="flex items-center space-x-2">
+      <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400 flex items-center justify-center text-sky-400 font-bold text-sm">
+        🎙️
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight text-white leading-tight">Meeting Transcriber</h1>
+        <p class="text-xs text-slate-400">Gemini Verbatim & Diarization</p>
+      </div>
+    </div>
+
+    <!-- PWA Install Button (Shown when available) -->
+    <button id="btn-install" class="hidden text-xs bg-sky-500 hover:bg-sky-600 text-white font-semibold px-3 py-1.5 rounded-lg shadow-sm transition flex items-center space-x-1">
+      <span>📱 Install</span>
+    </button>
+  </header>
+
+  <!-- Main Scrollable Body -->
+  <main class="flex-1 overflow-y-auto custom-scroll p-4 max-w-lg mx-auto w-full">
+
+    <!-- TAB 1: TRANSCRIBE -->
+    <section id="tab-transcribe" class="space-y-4">
+
+      <!-- Card: Audio Input Selector -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Audio Recording</span>
+          <span id="badge-source" class="text-[11px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full">File / Mic</span>
+        </div>
+
+        <!-- Mode Toggle (Upload File vs Live Mic) -->
+        <div class="grid grid-cols-2 gap-2 bg-slate-900/80 p-1 rounded-xl border border-slate-700/50">
+          <button id="btn-mode-file" class="py-2 text-xs font-semibold rounded-lg bg-sky-500 text-white transition">📁 Choose File</button>
+          <button id="btn-mode-record" class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">🎙️ Record Live</button>
+        </div>
+
+        <!-- File Upload Area -->
+        <div id="section-file-upload" class="space-y-3">
+          <label for="input-file" class="border-2 border-dashed border-slate-600 hover:border-sky-400 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition bg-slate-900/40">
+            <span class="text-3xl mb-1">🎵</span>
+            <span class="text-xs font-medium text-slate-200" id="lbl-file-name">Tap to select audio recording</span>
+            <span class="text-[11px] text-slate-400 mt-1">Supports .m4a, .mp3, .wav, .aac, .ogg, .flac</span>
+            <input type="file" id="input-file" accept="audio/*" class="hidden">
+          </label>
+        </div>
+
+        <!-- Live Mic Recording Area -->
+        <div id="section-live-record" class="hidden space-y-3 text-center py-2">
+          <div class="flex flex-col items-center justify-center space-y-2">
+            <div id="rec-pulse" class="w-16 h-16 rounded-full bg-slate-700 flex items-center justify-center text-2xl transition">
+              🎙️
+            </div>
+            <div id="rec-timer" class="text-lg font-mono font-bold text-slate-300">00:00</div>
+          </div>
+          <div class="flex justify-center space-x-3">
+            <button id="btn-rec-start" class="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition">Start Recording</button>
+            <button id="btn-rec-stop" class="hidden bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold px-4 py-2 rounded-xl transition">Stop & Use</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Model & Options -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Settings & Prompts</span>
+
+        <div>
+          <label class="block text-xs text-slate-300 mb-1 font-medium">Gemini AI Model</label>
+          <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
+            <option value="gemini-3.6-flash" selected>gemini-3.6-flash (Recommended)</option>
+            <option value="gemini-3.5-flash">gemini-3.5-flash</option>
+            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Fastest)</option>
+            <option value="gemini-3-pro">gemini-3-pro (Deep Reasoning)</option>
+          </select>
+        </div>
+
+        <div class="flex items-center justify-between pt-1">
+          <div>
+            <div class="text-xs font-medium text-slate-200">Executive Meeting Notes</div>
+            <div class="text-[11px] text-slate-400">Generate structured minutes, action items, & topics</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer">
+            <input type="checkbox" id="chk-notes" class="sr-only peer" checked>
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+          </label>
+        </div>
+      </div>
+
+      <!-- Progress Area (Active during transcription) -->
+      <div id="section-progress" class="hidden bg-slate-800/90 border border-sky-500/40 rounded-2xl p-4 shadow-lg space-y-2">
+        <div class="flex justify-between items-center text-xs">
+          <span id="lbl-progress-status" class="text-sky-300 font-medium animate-pulse">Uploading audio...</span>
+          <span id="lbl-progress-pct" class="text-slate-400 font-mono">0%</span>
+        </div>
+        <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-700">
+          <div id="bar-progress" class="bg-sky-500 h-2 rounded-full transition-all duration-300 w-0"></div>
+        </div>
+      </div>
+
+      <!-- Action Button -->
+      <div>
+        <button id="btn-start" class="w-full py-3.5 bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white font-bold text-sm rounded-2xl shadow-lg shadow-sky-500/20 transition active:scale-[0.98]">
+          ⚡ Start Transcription
+        </button>
+      </div>
+    </section>
+
+    <!-- TAB 2: RESULTS -->
+    <section id="tab-results" class="hidden space-y-4">
+      <!-- Subtabs for Transcript vs Notes -->
+      <div class="grid grid-cols-2 gap-2 bg-slate-800 p-1 rounded-xl border border-slate-700">
+        <button id="btn-subtab-transcript" class="py-2 text-xs font-semibold rounded-lg bg-sky-500 text-white transition">Diarized Transcript</button>
+        <button id="btn-subtab-notes" class="py-2 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">Executive Notes</button>
+      </div>
+
+      <!-- Content Box -->
+      <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 shadow-lg min-h-[350px] flex flex-col justify-between">
+        <div id="results-container" class="text-xs text-slate-200 select-text leading-relaxed whitespace-pre-wrap max-h-[500px] overflow-y-auto custom-scroll pr-1">
+          <div class="text-center text-slate-500 py-16">
+            <span class="text-3xl block mb-2">📄</span>
+            No transcription yet.<br>Upload an audio recording to get started.
+          </div>
+        </div>
+
+        <!-- Export Buttons -->
+        <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between gap-2">
+          <button id="btn-copy" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
+            <span>📋 Copy</span>
+          </button>
+          <button id="btn-download-txt" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
+            <span>💾 Save .txt</span>
+          </button>
+          <button id="btn-download-md" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
+            <span>📑 Save .md</span>
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: SETTINGS -->
+    <section id="tab-settings" class="hidden space-y-4">
+      <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 shadow-lg space-y-3">
+        <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Gemini API Key</span>
+        <p class="text-xs text-slate-400">
+          Your key is saved exclusively in your phone browser's private local storage. It is never stored on any server.
+        </p>
+        <div class="relative">
+          <input type="password" id="input-api-key" placeholder="AIzaSy..." class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2.5 text-xs text-white focus:outline-none focus:border-sky-400 font-mono">
+          <button id="btn-toggle-key" class="absolute right-3 top-2.5 text-xs text-slate-400 hover:text-white">👁️</button>
+        </div>
+        <button id="btn-save-key" class="w-full py-2.5 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl transition">
+          Save API Key
+        </button>
+      </div>
+
+      <!-- App Info -->
+      <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 shadow-lg space-y-2 text-xs text-slate-400">
+        <span class="text-xs font-bold uppercase tracking-wider text-sky-400 block mb-1">About</span>
+        <p>• <strong>Hosting</strong>: 100% Free on GitHub Pages</p>
+        <p>• <strong>Language</strong>: Verbatim Bangla (বাংলা) & English Diarization</p>
+        <p>• <strong>Offline Support</strong>: Progressive Web App (PWA)</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Bottom Navigation Bar -->
+  <nav class="bg-slate-900 border-t border-slate-800 px-6 py-2 flex justify-around items-center flex-shrink-0">
+    <button id="nav-transcribe" class="flex flex-col items-center space-y-1 text-sky-400">
+      <span class="text-lg">🎙️</span>
+      <span class="text-[10px] font-bold">Transcribe</span>
+    </button>
+    <button id="nav-results" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-white">
+      <span class="text-lg">📋</span>
+      <span class="text-[10px] font-semibold">Results</span>
+    </button>
+    <button id="nav-settings" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-white">
+      <span class="text-lg">⚙️</span>
+      <span class="text-[10px] font-semibold">Settings</span>
+    </button>
+  </nav>
+
+  <!-- Alert Modal -->
+  <div id="modal-alert" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-sm w-full space-y-3 shadow-2xl">
+      <h3 id="modal-title" class="text-sm font-bold text-sky-400">Notice</h3>
+      <p id="modal-msg" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap"></p>
+      <button id="modal-close" class="w-full py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl">OK</button>
+    </div>
+  </div>
+
+  <!-- APPLICATION LOGIC -->
+  <script>
+    // Register Service Worker for PWA
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+
+    // PWA Install Prompt
+    let deferredPrompt;
+    const btnInstall = document.getElementById("btn-install");
+    window.addEventListener("beforeinstallprompt", (e) => {
+      e.preventDefault();
+      deferredPrompt = e;
+      btnInstall.classList.remove("hidden");
+    });
+    btnInstall.addEventListener("click", async () => {
+      if (deferredPrompt) {
+        deferredPrompt.prompt();
+        const { outcome } = await deferredPrompt.userChoice;
+        if (outcome === "accepted") {
+          btnInstall.classList.add("hidden");
+        }
+        deferredPrompt = null;
+      }
+    });
+
+    // Transcription Prompts matching transcribe.py
+    const TRANSCRIPTION_PROMPT = `You are an expert verbatim meeting transcriber and diarization specialist.
+Please provide an accurate, verbatim, diarized transcript of this audio recording.
+
+Strict Transcription, Language Fidelity & Formatting Rules:
+1. Verbatim Accuracy: Transcribe every word exactly as spoken. Do NOT paraphrase, summarize, omit, or invent words. Mark inaudible parts as [inaudible].
+2. Strict Language Fidelity: Preserve each utterance in its original spoken language. Spoken Bangla MUST be transcribed in native Bengali script (বাংলা). Spoken English in English script. For code-mixed speech, transcribe Bengali words in Bengali script while preserving embedded English technical terms/brand names in English script.
+3. Speaker Diarization: Identify distinct speakers and label each speaker turn consistently (e.g. "[00:00] Speaker 1: ...", "[00:15] Speaker 2: ..."). Every change in speaker must start on a new line with its own timestamp and speaker label.
+4. Mandatory Timestamp Format: Use ONLY the single point format [MM:SS] (or [HH:MM:SS]) at the start of each speaker turn.
+5. Output the transcript in chronological order.`;
+
+    const MEETING_NOTES_PROMPT = `You are an expert executive assistant and meeting intelligence analyst.
+Analyze the ENTIRE merged transcript provided below and extract structured notes:
+1. company_name: Client or company discussed (or null)
+2. meeting_type: Meeting category if clear (or null)
+3. person_names: Array of key individuals mentioned
+4. topic_slug: 2-3 word English slug
+5. notes_markdown: Comprehensive minutes in Markdown (## 1. Executive Summary, ## 2. Key Decisions, ## 3. Action Items with checkboxes, ## 4. Open Questions).
+
+Output ONLY a valid JSON object matching this schema:
+{
+  "company_name": "Company-Or-Null",
+  "meeting_type": "Type-Or-Null",
+  "person_names": ["Name1", "Name2"],
+  "topic_slug": "Topic-Slug",
+  "notes_markdown": "## 1. Executive Summary\\n...\\n## 2. Key Decisions\\n...\\n## 3. Action Items\\n..."
+}`;
+
+    // App State
+    let selectedAudioFile = null;
+    let currentTranscript = "";
+    let currentNotes = "";
+    let currentResultsSubtab = "transcript";
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordTimerInterval = null;
+    let recordSeconds = 0;
+
+    // Load API Key
+    const inputApiKey = document.getElementById("input-api-key");
+    const savedKey = localStorage.getItem("gemini_api_key") || "";
+    inputApiKey.value = savedKey;
+
+    // Tab Navigation
+    function switchTab(tabId) {
+      ["transcribe", "results", "settings"].forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle("hidden", t !== tabId);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === tabId) {
+          navBtn.classList.add("text-sky-400");
+          navBtn.classList.remove("text-slate-400");
+        } else {
+          navBtn.classList.remove("text-sky-400");
+          navBtn.classList.add("text-slate-400");
+        }
+      });
+    }
+
+    document.getElementById("nav-transcribe").onclick = () => switchTab("transcribe");
+    document.getElementById("nav-results").onclick = () => switchTab("results");
+    document.getElementById("nav-settings").onclick = () => switchTab("settings");
+
+    // File vs Live Mode Toggle
+    const btnModeFile = document.getElementById("btn-mode-file");
+    const btnModeRecord = document.getElementById("btn-mode-record");
+    const sectionFileUpload = document.getElementById("section-file-upload");
+    const sectionLiveRecord = document.getElementById("section-live-record");
+
+    btnModeFile.onclick = () => {
+      btnModeFile.classList.add("bg-sky-500", "text-white");
+      btnModeFile.classList.remove("text-slate-400");
+      btnModeRecord.classList.remove("bg-sky-500", "text-white");
+      btnModeRecord.classList.add("text-slate-400");
+      sectionFileUpload.classList.remove("hidden");
+      sectionLiveRecord.classList.add("hidden");
+    };
+
+    btnModeRecord.onclick = () => {
+      btnModeRecord.classList.add("bg-sky-500", "text-white");
+      btnModeRecord.classList.remove("text-slate-400");
+      btnModeFile.classList.remove("bg-sky-500", "text-white");
+      btnModeFile.classList.add("text-slate-400");
+      sectionFileUpload.classList.add("hidden");
+      sectionLiveRecord.classList.remove("hidden");
+    };
+
+    // File Input Selection
+    const inputFile = document.getElementById("input-file");
+    const lblFileName = document.getElementById("lbl-file-name");
+
+    inputFile.onchange = (e) => {
+      if (e.target.files && e.target.files[0]) {
+        selectedAudioFile = e.target.files[0];
+        const szMb = (selectedAudioFile.size / (1024 * 1024)).toFixed(1);
+        lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB)`;
+      }
+    };
+
+    // Live Recording
+    const btnRecStart = document.getElementById("btn-rec-start");
+    const btnRecStop = document.getElementById("btn-rec-stop");
+    const recTimer = document.getElementById("rec-timer");
+    const recPulse = document.getElementById("rec-pulse");
+
+    btnRecStart.onclick = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaRecorder = new MediaRecorder(stream);
+        recordedChunks = [];
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunks.push(e.data);
+        };
+
+        mediaRecorder.onstop = () => {
+          const blob = new Blob(recordedChunks, { type: "audio/webm" });
+          selectedAudioFile = new File([blob], `Recording_${new Date().toISOString().slice(0,10)}.webm`, { type: "audio/webm" });
+          lblFileName.innerText = `Recorded: ${selectedAudioFile.name}`;
+          btnModeFile.click(); // switch view back
+          showAlert("Recording Captured", "Voice recording ready for transcription!");
+        };
+
+        mediaRecorder.start();
+        btnRecStart.classList.add("hidden");
+        btnRecStop.classList.remove("hidden");
+        recPulse.classList.add("bg-rose-600", "animate-pulse");
+
+        recordSeconds = 0;
+        recordTimerInterval = setInterval(() => {
+          recordSeconds++;
+          const mins = String(Math.floor(recordSeconds / 60)).padStart(2, "0");
+          const secs = String(recordSeconds % 60).padStart(2, "0");
+          recTimer.innerText = `${mins}:${secs}`;
+        }, 1000);
+
+      } catch (err) {
+        showAlert("Microphone Error", "Could not access microphone: " + err.message);
+      }
+    };
+
+    btnRecStop.onclick = () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+        clearInterval(recordTimerInterval);
+        btnRecStop.classList.add("hidden");
+        btnRecStart.classList.remove("hidden");
+        recPulse.classList.remove("bg-rose-600", "animate-pulse");
+      }
+    };
+
+    // Save API Key
+    document.getElementById("btn-save-key").onclick = () => {
+      const key = inputApiKey.value.trim();
+      if (!key) {
+        showAlert("API Key Missing", "Please enter a valid Google Gemini API key.");
+        return;
+      }
+      localStorage.setItem("gemini_api_key", key);
+      showAlert("Saved", "Gemini API key saved securely on your device.");
+    };
+
+    // Toggle API Key visibility
+    document.getElementById("btn-toggle-key").onclick = () => {
+      inputApiKey.type = inputApiKey.type === "password" ? "text" : "password";
+    };
+
+    // Modal Helper
+    function showAlert(title, msg) {
+      document.getElementById("modal-title").innerText = title;
+      document.getElementById("modal-msg").innerText = msg;
+      document.getElementById("modal-alert").classList.remove("hidden");
+    }
+    document.getElementById("modal-close").onclick = () => {
+      document.getElementById("modal-alert").classList.add("hidden");
+    };
+
+    // Progress updates
+    function setProgress(status, pct) {
+      document.getElementById("section-progress").classList.remove("hidden");
+      document.getElementById("lbl-progress-status").innerText = status;
+      document.getElementById("lbl-progress-pct").innerText = `${pct}%`;
+      document.getElementById("bar-progress").style.width = `${pct}%`;
+    }
+    function hideProgress() {
+      document.getElementById("section-progress").classList.add("hidden");
+    }
+
+    // Convert file to Base64
+    function fileToBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result;
+          const base64 = res.split(",")[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // Google Gemini API Upload & Transcribe Flow
+    async function executeTranscription() {
+      const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
+      if (!apiKey) {
+        showAlert("API Key Required", "Please enter your Gemini API key in Settings before transcribing.");
+        switchTab("settings");
+        return;
+      }
+      if (!selectedAudioFile) {
+        showAlert("No File Selected", "Please choose an audio file or record live speech first.");
+        return;
+      }
+
+      const model = document.getElementById("select-model").value;
+      const generateNotes = document.getElementById("chk-notes").checked;
+      const btnStart = document.getElementById("btn-start");
+
+      btnStart.disabled = true;
+      btnStart.classList.add("opacity-50");
+
+      try {
+        const fileSizeMb = selectedAudioFile.size / (1024 * 1024);
+
+        let audioPart;
+        let uploadedFileName = null;
+
+        // Path A: Inline Base64 for files < 18MB
+        if (fileSizeMb < 18) {
+          setProgress("Reading audio data...", 20);
+          const base64Data = await fileToBase64(selectedAudioFile);
+          audioPart = {
+            inlineData: {
+              mimeType: selectedAudioFile.type || "audio/mp3",
+              data: base64Data
+            }
+          };
+        } 
+        // Path B: Resumable File API for larger files
+        else {
+          setProgress("Initiating Google File Upload...", 15);
+          const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=resumable&key=${apiKey}`;
+          const initResp = await fetch(initUrl, {
+            method: "POST",
+            headers: {
+              "X-Goog-Upload-Protocol": "resumable",
+              "X-Goog-Upload-Command": "start",
+              "X-Goog-Upload-Header-Content-Length": String(selectedAudioFile.size),
+              "X-Goog-Upload-Header-Content-Type": selectedAudioFile.type || "audio/mp3",
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ file: { display_name: selectedAudioFile.name } })
+          });
+
+          if (!initResp.ok) {
+            const err = await initResp.text();
+            throw new Error(`File upload initiation failed: ${err}`);
+          }
+
+          const uploadUrl = initResp.headers.get("x-goog-upload-url") || initResp.headers.get("upload-url");
+          if (!uploadUrl) throw new Error("Could not obtain upload URL from Google File API.");
+
+          setProgress("Uploading audio to Gemini File API...", 40);
+          const uploadResp = await fetch(uploadUrl, {
+            method: "POST",
+            headers: {
+              "Content-Length": String(selectedAudioFile.size),
+              "X-Goog-Upload-Offset": "0",
+              "X-Goog-Upload-Command": "upload, finalize"
+            },
+            body: selectedAudioFile
+          });
+
+          if (!uploadResp.ok) {
+            const err = await uploadResp.text();
+            throw new Error(`File binary upload failed: ${err}`);
+          }
+
+          const uploadData = await uploadResp.json();
+          uploadedFileName = uploadData.file.name;
+          audioPart = {
+            fileData: {
+              mimeType: uploadData.file.mimeType || "audio/mp3",
+              fileUri: uploadData.file.uri
+            }
+          };
+        }
+
+        // Step 2: Transcribe via Gemini
+        setProgress("Transcribing with Gemini AI...", 65);
+        const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        const genResp = await fetch(genUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                parts: [
+                  audioPart,
+                  { text: TRANSCRIPTION_PROMPT }
+                ]
+              }
+            ]
+          })
+        });
+
+        if (!genResp.ok) {
+          const errText = await genResp.text();
+          throw new Error(`Gemini Transcription Error (${genResp.status}): ${errText}`);
+        }
+
+        const genData = await genResp.json();
+        currentTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "No transcript generated.";
+
+        // Clean up uploaded file from Google servers
+        if (uploadedFileName) {
+          fetch(`https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}?key=${apiKey}`, { method: "DELETE" }).catch(() => {});
+        }
+
+        // Step 3: Meeting Notes (if requested)
+        if (generateNotes && currentTranscript) {
+          setProgress("Generating executive meeting notes...", 85);
+          const notesResp = await fetch(genUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    { text: `${MEETING_NOTES_PROMPT}\n\n--- FULL MERGED MEETING TRANSCRIPT ---\n${currentTranscript}` }
+                  ]
+                }
+              ],
+              generationConfig: {
+                responseMimeType: "application/json"
+              }
+            })
+          });
+
+          if (notesResp.ok) {
+            const notesData = await notesResp.json();
+            const rawJson = notesData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            try {
+              const parsed = JSON.parse(rawJson);
+              currentNotes = parsed.notes_markdown || "";
+            } catch (e) {
+              currentNotes = rawJson;
+            }
+          }
+        }
+
+        setProgress("Complete!", 100);
+        setTimeout(hideProgress, 1000);
+
+        // Switch to Results tab
+        renderResults();
+        switchTab("results");
+
+      } catch (err) {
+        hideProgress();
+        showAlert("Error", err.message);
+      } finally {
+        btnStart.disabled = false;
+        btnStart.classList.remove("opacity-50");
+      }
+    }
+
+    document.getElementById("btn-start").onclick = executeTranscription;
+
+    // Results Subtab Switching & Rendering
+    const btnSubtabTranscript = document.getElementById("btn-subtab-transcript");
+    const btnSubtabNotes = document.getElementById("btn-subtab-notes");
+    const resultsContainer = document.getElementById("results-container");
+
+    function renderResults() {
+      if (currentResultsSubtab === "transcript") {
+        resultsContainer.className = "text-xs text-slate-200 select-text leading-relaxed whitespace-pre-wrap max-h-[500px] overflow-y-auto custom-scroll pr-1";
+        resultsContainer.innerText = currentTranscript || "No transcript available.";
+      } else {
+        resultsContainer.className = "markdown-content text-xs text-slate-200 select-text leading-relaxed max-h-[500px] overflow-y-auto custom-scroll pr-1";
+        resultsContainer.innerHTML = marked.parse(currentNotes || "No meeting notes available.");
+      }
+    }
+
+    btnSubtabTranscript.onclick = () => {
+      currentResultsSubtab = "transcript";
+      btnSubtabTranscript.classList.add("bg-sky-500", "text-white");
+      btnSubtabTranscript.classList.remove("text-slate-400");
+      btnSubtabNotes.classList.remove("bg-sky-500", "text-white");
+      btnSubtabNotes.classList.add("text-slate-400");
+      renderResults();
+    };
+
+    btnSubtabNotes.onclick = () => {
+      currentResultsSubtab = "notes";
+      btnSubtabNotes.classList.add("bg-sky-500", "text-white");
+      btnSubtabNotes.classList.remove("text-slate-400");
+      btnSubtabTranscript.classList.remove("bg-sky-500", "text-white");
+      btnSubtabTranscript.classList.add("text-slate-400");
+      renderResults();
+    };
+
+    // Copy to Clipboard
+    document.getElementById("btn-copy").onclick = () => {
+      const text = currentResultsSubtab === "transcript" ? currentTranscript : currentNotes;
+      if (!text) {
+        showAlert("Empty", "No text to copy.");
+        return;
+      }
+      navigator.clipboard.writeText(text).then(() => {
+        showAlert("Copied", "Copied to clipboard successfully!");
+      });
+    };
+
+    // Download Helpers
+    function downloadFile(content, filename, type) {
+      if (!content) {
+        showAlert("Empty", "No content to save.");
+        return;
+      }
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    document.getElementById("btn-download-txt").onclick = () => {
+      const baseName = selectedAudioFile ? selectedAudioFile.name.replace(/\.[^/.]+$/, "") : "Meeting";
+      const fullText = `# Diarized Transcript\n\n${currentTranscript}\n\n# Meeting Notes\n\n${currentNotes}`;
+      downloadFile(fullText, `${baseName}_transcript.txt`, "text/plain;charset=utf-8");
+    };
+
+    document.getElementById("btn-download-md").onclick = () => {
+      const baseName = selectedAudioFile ? selectedAudioFile.name.replace(/\.[^/.]+$/, "") : "Meeting";
+      const fullText = `# Meeting Transcript & Notes\n\n## Diarized Transcript\n\n${currentTranscript}\n\n## Executive Meeting Notes\n\n${currentNotes}`;
+      downloadFile(fullText, `${baseName}_notes.md`, "text/markdown;charset=utf-8");
+    };
+  </script>
+</body>
+</html>
