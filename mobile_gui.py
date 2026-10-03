@@ -517,6 +517,67 @@ class MobileTranscriberLayout(BoxLayout):
         card_info.add_widget(lbl_details)
         box.add_widget(card_info)
 
+        # Card: Over-The-Air Code Sync (Fast Development)
+        card_ota = MobileCard(orientation="vertical", size_hint_y=None, height=155, padding=[12, 10, 12, 10], spacing=6)
+        lbl_ota_title = Label(
+            text="Over-The-Air (OTA) Code Sync",
+            font_size="13sp",
+            bold=True,
+            color=get_color_from_hex("#38BDF8"),
+            size_hint_y=None,
+            height=20,
+            halign="left",
+            valign="middle"
+        )
+        lbl_ota_title.bind(size=lbl_ota_title.setter("text_size"))
+        card_ota.add_widget(lbl_ota_title)
+
+        lbl_ota_desc = Label(
+            text="Download the latest Python code directly from GitHub in 3 seconds without rebuilding the APK.",
+            font_size="11sp",
+            color=get_color_from_hex("#94A3B8"),
+            size_hint_y=None,
+            height=30,
+            halign="left",
+            valign="top"
+        )
+        lbl_ota_desc.bind(size=lbl_ota_desc.setter("text_size"))
+        card_ota.add_widget(lbl_ota_desc)
+
+        ota_btn_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=36, spacing=8)
+        self.btn_sync_code = Button(
+            text="Sync Latest Code from GitHub",
+            size_hint_x=0.7,
+            font_size="12sp",
+            bold=True,
+            background_color=get_color_from_hex("#2563EB")
+        )
+        self.btn_sync_code.bind(on_release=self._start_ota_sync)
+        ota_btn_row.add_widget(self.btn_sync_code)
+
+        btn_reset_code = Button(
+            text="Reset",
+            size_hint_x=0.3,
+            font_size="11sp",
+            background_color=get_color_from_hex("#475569")
+        )
+        btn_reset_code.bind(on_release=self._reset_ota_code)
+        ota_btn_row.add_widget(btn_reset_code)
+        card_ota.add_widget(ota_btn_row)
+
+        self.lbl_ota_status = Label(
+            text=self._get_ota_status_text(),
+            font_size="10sp",
+            color=get_color_from_hex("#10B981" if self._has_ota_updates() else "#94A3B8"),
+            size_hint_y=None,
+            height=20,
+            halign="left",
+            valign="middle"
+        )
+        self.lbl_ota_status.bind(size=self.lbl_ota_status.setter("text_size"))
+        card_ota.add_widget(self.lbl_ota_status)
+        box.add_widget(card_ota)
+
         scroll.add_widget(box)
         self.content_area.add_widget(scroll)
 
@@ -530,6 +591,63 @@ class MobileTranscriberLayout(BoxLayout):
         save_app_settings(self.settings)
         os.environ["GEMINI_API_KEY"] = key
         self._show_info_modal("Settings Saved", "Your Gemini API Key has been saved successfully.")
+
+    # --------------------------------------------------------------------------
+    # Over-The-Air (OTA) Code Sync Handlers
+    # --------------------------------------------------------------------------
+
+    def _has_ota_updates(self) -> bool:
+        ota_dir = get_app_user_data_dir() / "ota_updates"
+        return ota_dir.exists() and (ota_dir / "mobile_gui.py").exists()
+
+    def _get_ota_status_text(self) -> str:
+        if self._has_ota_updates():
+            return "Active version: Custom OTA synced scripts"
+        return "Active version: Bundled APK scripts"
+
+    def _start_ota_sync(self, instance=None):
+        self.btn_sync_code.disabled = True
+        self.btn_sync_code.text = "Syncing code..."
+        threading.Thread(target=self._ota_sync_worker, daemon=True).start()
+
+    def _ota_sync_worker(self):
+        import urllib.request
+        try:
+            ota_dir = get_app_user_data_dir() / "ota_updates"
+            ota_dir.mkdir(parents=True, exist_ok=True)
+            files = ["mobile_gui.py", "transcribe.py"]
+            base = "https://raw.githubusercontent.com/MeshkatSaiam/meeting-transcriber/main/"
+            for f in files:
+                url = base + f
+                dest = ota_dir / f
+                urllib.request.urlretrieve(url, str(dest))
+            Clock.schedule_once(lambda dt: self._on_ota_success())
+        except Exception as e:
+            Clock.schedule_once(lambda dt, err=str(e): self._on_ota_error(err))
+
+    def _on_ota_success(self):
+        self.btn_sync_code.disabled = False
+        self.btn_sync_code.text = "Sync Latest Code from GitHub"
+        self.lbl_ota_status.text = "Active version: Custom OTA synced scripts (Restart to apply)"
+        self.lbl_ota_status.color = get_color_from_hex("#10B981")
+        self._show_info_modal(
+            "Code Sync Complete!",
+            "Latest Python code was downloaded successfully!\n\nPlease restart the app to run the new version."
+        )
+
+    def _on_ota_error(self, err_msg: str):
+        self.btn_sync_code.disabled = False
+        self.btn_sync_code.text = "Sync Latest Code from GitHub"
+        self._show_info_modal("Sync Error", f"Could not fetch code updates from GitHub:\n\n{err_msg}")
+
+    def _reset_ota_code(self, instance=None):
+        import shutil
+        ota_dir = get_app_user_data_dir() / "ota_updates"
+        if ota_dir.exists():
+            shutil.rmtree(str(ota_dir), ignore_errors=True)
+        self.lbl_ota_status.text = "Active version: Bundled APK scripts"
+        self.lbl_ota_status.color = get_color_from_hex("#94A3B8")
+        self._show_info_modal("Reset to Default", "Reverted to APK's original bundled scripts. Please restart the app.")
 
     # --------------------------------------------------------------------------
     # File Picker Modal

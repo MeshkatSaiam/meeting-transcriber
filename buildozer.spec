@@ -53,8 +53,11 @@ android.skip_update = False
 android.accept_sdk_license = True
 
 # (str) The Android arch to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
-# In modern Android devices, arm64-v8a is the standard.
-android.archs = arm64-v8a, armeabi-v7a
+# In modern Android devices, arm64-v8a is the 64-bit standard and cuts compile time in half.
+android.archs = arm64-v8a
+
+# (str) python-for-android branch to use. Pin to stable v2024.01.21 to use battle-tested Python 3.11
+p4a.branch = v2024.01.21
 
 # (bool) Allow backup
 android.allow_backup = True

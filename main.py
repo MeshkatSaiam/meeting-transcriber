@@ -22,7 +22,25 @@ def request_android_permissions():
         except Exception as e:
             print(f"[Android Permissions Warning]: {e}", file=sys.stderr, flush=True)
 
+def setup_ota_path():
+    """Ensure any downloaded OTA updates from GitHub are prioritized over bundled code."""
+    from pathlib import Path
+    try:
+        possible_dirs = [
+            Path.home() / ".meeting_transcriber" / "ota_updates",
+            Path("/data/data/org.meshkat.meetingtranscriber/files/ota_updates"),
+            Path("/data/user/0/org.meshkat.meetingtranscriber/files/ota_updates"),
+        ]
+        for d in possible_dirs:
+            if d.exists() and (d / "mobile_gui.py").exists():
+                sys.path.insert(0, str(d))
+                print(f"[OTA Sync]: Prioritizing updated scripts from {d}", flush=True)
+                break
+    except Exception as e:
+        print(f"[OTA Warning]: {e}", file=sys.stderr, flush=True)
+
 def main():
+    setup_ota_path()
     is_mobile_target = (platform == "android") or ("--mobile" in sys.argv)
 
     if is_mobile_target:
