@@ -1,8 +1,11 @@
-const CACHE_NAME = "meeting-transcriber-v1";
+const CACHE_NAME = "meeting-transcriber-v2";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
-  "./manifest.json"
+  "./manifest.json",
+  "./lame.min.js",
+  "./icon-192.png",
+  "./icon-512.png"
 ];
 
 self.addEventListener("install", (event) => {

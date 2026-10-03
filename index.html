@@ -11,9 +11,10 @@
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" href="icon-192.png">
 
-  <!-- Tailwind CSS & Marked (Markdown Renderer) -->
+  <!-- Tailwind CSS, Marked & LameJS Audio Compressor -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="lame.min.js"></script>
 
   <style>
     body {
@@ -117,10 +118,11 @@
         <div>
           <label class="block text-xs text-slate-300 mb-1 font-medium">Gemini AI Model</label>
           <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
-            <option value="gemini-3.6-flash" selected>gemini-3.6-flash (Recommended)</option>
-            <option value="gemini-3.5-flash">gemini-3.5-flash</option>
-            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Fastest)</option>
-            <option value="gemini-3-pro">gemini-3-pro (Deep Reasoning)</option>
+            <option value="gemini-2.5-flash" selected>gemini-2.5-flash (Recommended & Stable)</option>
+            <option value="gemini-3.6-flash">gemini-3.6-flash (Latest Preview)</option>
+            <option value="gemini-2.5-pro">gemini-2.5-pro (Deep Reasoning)</option>
+            <option value="gemini-2.0-flash">gemini-2.0-flash (Ultra Fast)</option>
+            <option value="gemini-1.5-flash">gemini-1.5-flash (Fallback)</option>
           </select>
         </div>
 
@@ -277,21 +279,25 @@ Strict Transcription, Language Fidelity & Formatting Rules:
 5. Output the transcript in chronological order.`;
 
     const MEETING_NOTES_PROMPT = `You are an expert executive assistant and meeting intelligence analyst.
-Analyze the ENTIRE merged transcript provided below and extract structured notes:
-1. company_name: Client or company discussed (or null)
-2. meeting_type: Meeting category if clear (or null)
-3. person_names: Array of key individuals mentioned
-4. topic_slug: 2-3 word English slug
-5. notes_markdown: Comprehensive minutes in Markdown (## 1. Executive Summary, ## 2. Key Decisions, ## 3. Action Items with checkboxes, ## 4. Open Questions).
+Analyze the ENTIRE merged transcript provided below and generate comprehensive, high-level meeting minutes formatted in clean Markdown.
 
-Output ONLY a valid JSON object matching this schema:
-{
-  "company_name": "Company-Or-Null",
-  "meeting_type": "Type-Or-Null",
-  "person_names": ["Name1", "Name2"],
-  "topic_slug": "Topic-Slug",
-  "notes_markdown": "## 1. Executive Summary\\n...\\n## 2. Key Decisions\\n...\\n## 3. Action Items\\n..."
-}`;
+Structure your response using these exact sections:
+# Meeting Summary & Intelligence
+
+## 1. Executive Overview
+- **Core Topic**: Summary of the main objective and purpose of the meeting.
+- **Key Participants & Companies**: List all identified participants, clients, or organizations discussed.
+
+## 2. Key Decisions & Agreements
+- Clearly list all decisions, agreements, and conclusions reached.
+
+## 3. Action Items & Next Steps
+- [ ] Task description (Assignee: Name if mentioned | Deadline if mentioned)
+
+## 4. Open Questions & Follow-ups
+- List any unresolved topics or questions deferred for future discussion.
+
+Language Rule: Preserve original context and names. For Bengali discussions, preserve Bengali terminology in native script (বাংলা).`;
 
     // App State
     let selectedAudioFile = null;
@@ -359,9 +365,11 @@ Output ONLY a valid JSON object matching this schema:
       if (e.target.files && e.target.files[0]) {
         selectedAudioFile = e.target.files[0];
         const szMb = (selectedAudioFile.size / (1024 * 1024)).toFixed(1);
-        lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB)`;
         if (selectedAudioFile.size > 18 * 1024 * 1024) {
-          showAlert("File Size Warning", `This file is ${szMb} MB. Direct browser upload supports up to 18 MB. Please compress this audio file or use the 'Record Live' tab for long meetings.`);
+          lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB — Auto-Compress ⚡)`;
+          showAlert("Large Audio Detected", `This audio is ${szMb} MB. When you tap Start Transcription, the app will automatically compress it on your device to speech-grade MP3 before transcribing.`);
+        } else {
+          lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB)`;
         }
       }
     };
@@ -476,6 +484,162 @@ Output ONLY a valid JSON object matching this schema:
       });
     }
 
+    // Client-side Audio Compressor for Files > 18MB
+    async function compressAudioFile(file, onProgress) {
+      if (!window.lamejs) {
+        throw new Error("Audio compressor (lamejs) is not ready. Please refresh the page.");
+      }
+      onProgress("Reading audio file into memory...", 10);
+      const arrayBuffer = await file.arrayBuffer();
+
+      onProgress("Decoding audio with browser engine...", 20);
+      const tempCtx = new (window.AudioContext || window.webkitAudioContext)();
+      let decodedBuffer;
+      try {
+        decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
+      } catch (decodeErr) {
+        throw new Error("Browser could not decode this audio format: " + decodeErr.message);
+      } finally {
+        tempCtx.close().catch(() => {});
+      }
+
+      const durationSec = decodedBuffer.duration;
+      const targetSampleRate = 16000;
+
+      // Speech needs very little bitrate:
+      // < 50 mins: 32 kbps (~14 MB/hr)
+      // 50-90 mins: 24 kbps (~10.8 MB/hr)
+      // > 90 mins: 16 kbps (~7.2 MB/hr)
+      let kbps = 32;
+      if (durationSec > 5400) {
+        kbps = 16;
+      } else if (durationSec > 3000) {
+        kbps = 24;
+      }
+
+      onProgress(`Resampling speech to 16kHz mono (${Math.round(durationSec / 60)} mins)...`, 35);
+      const targetLength = Math.max(1, Math.ceil(durationSec * targetSampleRate));
+      const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, targetLength, targetSampleRate);
+
+      const source = offlineCtx.createBufferSource();
+      source.buffer = decodedBuffer;
+      source.connect(offlineCtx.destination);
+      source.start(0);
+
+      const renderedBuffer = await offlineCtx.startRendering();
+      const float32 = renderedBuffer.getChannelData(0);
+
+      onProgress("Converting samples to 16-bit PCM...", 45);
+      const pcm16 = new Int16Array(float32.length);
+      for (let i = 0; i < float32.length; i++) {
+        let s = Math.max(-1, Math.min(1, float32[i]));
+        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+      }
+
+      onProgress(`Compressing speech to ${kbps}kbps MP3...`, 55);
+      const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
+      const mp3Chunks = [];
+      const chunkSize = 1152 * 8; // Standard LAME chunk
+
+      for (let i = 0; i < pcm16.length; i += chunkSize) {
+        const chunk = pcm16.subarray(i, i + chunkSize);
+        const mp3buf = mp3encoder.encodeBuffer(chunk);
+        if (mp3buf.length > 0) {
+          mp3Chunks.push(mp3buf);
+        }
+        if ((i / chunkSize) % 25 === 0) {
+          const pct = Math.min(75, 55 + Math.round((i / pcm16.length) * 20));
+          onProgress(`Compressing speech (${pct}%)...`, pct);
+          // Yield to browser UI thread to prevent mobile stutter
+          await new Promise(r => setTimeout(r, 0));
+        }
+      }
+
+      const flushBuf = mp3encoder.flush();
+      if (flushBuf.length > 0) {
+        mp3Chunks.push(flushBuf);
+      }
+
+      const mp3Blob = new Blob(mp3Chunks, { type: "audio/mp3" });
+      const compressedMb = (mp3Blob.size / (1024 * 1024)).toFixed(2);
+      onProgress(`Compressed: ${compressedMb} MB`, 75);
+
+      return new File([mp3Blob], file.name.replace(/\.[^/.]+$/, "") + ".mp3", { type: "audio/mp3" });
+    }
+
+    // Executive Notes Generator with Auto-Retry & Direct Markdown
+    async function generateMeetingNotesAction(apiKey, model, transcriptText) {
+      if (!transcriptText) {
+        showAlert("No Transcript", "Please transcribe an audio file first before generating notes.");
+        return;
+      }
+      setProgress("Generating executive meeting notes...", 88);
+
+      // Delay slightly to prevent consecutive Gemini rate-limit spikes
+      await new Promise(r => setTimeout(r, 1200));
+
+      const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+      const payload = {
+        contents: [
+          {
+            parts: [
+              { text: `${MEETING_NOTES_PROMPT}\n\n--- FULL MERGED MEETING TRANSCRIPT ---\n${transcriptText}` }
+            ]
+          }
+        ]
+      };
+
+      let resp;
+      try {
+        resp = await fetch(genUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      } catch (netErr) {
+        throw new Error("Meeting notes network failure: " + netErr.message);
+      }
+
+      // Handle 429 rate limit with one automatic retry
+      if (resp.status === 429) {
+        setProgress("Rate limit encountered. Retrying notes in 4s...", 92);
+        await new Promise(r => setTimeout(r, 4000));
+        resp = await fetch(genUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+      }
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        throw new Error(`Meeting Notes Error (${resp.status}): ${errText}`);
+      }
+
+      const data = await resp.json();
+      const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+      if (!rawText) {
+        const finish = data.candidates?.[0]?.finishReason || "Empty response";
+        throw new Error(`Gemini returned empty notes (${finish}).`);
+      }
+
+      // Unpack markdown if wrapped in JSON schema
+      let clean = rawText.trim();
+      if (clean.startsWith("```json") || (clean.startsWith("{") && clean.includes("notes_markdown"))) {
+        try {
+          const stripped = clean.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+          const parsed = JSON.parse(stripped);
+          currentNotes = parsed.notes_markdown || clean;
+        } catch (e) {
+          currentNotes = clean;
+        }
+      } else {
+        currentNotes = clean;
+      }
+
+      renderResults();
+    }
+
     // Google Gemini API Upload & Transcribe Flow
     async function executeTranscription() {
       const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
@@ -497,26 +661,31 @@ Output ONLY a valid JSON object matching this schema:
       btnStart.classList.add("opacity-50");
 
       try {
-        const fileSizeMb = selectedAudioFile.size / (1024 * 1024);
+        let fileToUpload = selectedAudioFile;
+        const origSizeMb = selectedAudioFile.size / (1024 * 1024);
 
-        let audioPart;
-        let uploadedFileName = null;
-
-        if (fileSizeMb > 18) {
-          throw new Error(`File size (${fileSizeMb.toFixed(1)} MB) exceeds the 18 MB limit for direct browser transcription. Please compress your audio or use the 'Record Live' tab (which records up to 1 hour under 15 MB).`);
+        // Auto-compress on device if > 18MB or uncompressed large audio
+        if (origSizeMb > 18 || (selectedAudioFile.name.endsWith(".wav") && origSizeMb > 8)) {
+          setProgress(`Compressing audio (${origSizeMb.toFixed(1)} MB)...`, 5);
+          fileToUpload = await compressAudioFile(selectedAudioFile, (msg, pct) => setProgress(msg, pct));
         }
 
-        setProgress("Reading audio data...", 20);
-        const base64Data = await fileToBase64(selectedAudioFile);
-        audioPart = {
+        const finalSizeMb = fileToUpload.size / (1024 * 1024);
+        if (finalSizeMb > 19.5) {
+          throw new Error(`Compressed file is ${finalSizeMb.toFixed(1)} MB, exceeding the 19.5 MB browser limit. Please trim the recording.`);
+        }
+
+        setProgress("Reading audio data...", 78);
+        const base64Data = await fileToBase64(fileToUpload);
+        const audioPart = {
           inlineData: {
-            mimeType: selectedAudioFile.type || "audio/mp3",
+            mimeType: fileToUpload.type || "audio/mp3",
             data: base64Data
           }
         };
 
-        // Step 2: Transcribe via Gemini
-        setProgress("Transcribing with Gemini AI...", 65);
+        // Step 1: Transcribe via Gemini
+        setProgress("Transcribing with Gemini AI...", 82);
         const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
         const genResp = await fetch(genUrl, {
           method: "POST",
@@ -539,47 +708,24 @@ Output ONLY a valid JSON object matching this schema:
         }
 
         const genData = await genResp.json();
-        currentTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "No transcript generated.";
-
-        // Clean up uploaded file from Google servers
-        if (uploadedFileName) {
-          fetch(`https://generativelanguage.googleapis.com/v1beta/${uploadedFileName}?key=${apiKey}`, { method: "DELETE" }).catch(() => {});
+        currentTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+        if (!currentTranscript) {
+          const finishReason = genData.candidates?.[0]?.finishReason || "Unknown";
+          throw new Error(`No transcript generated by Gemini (Finish reason: ${finishReason}).`);
         }
 
-        // Step 3: Meeting Notes (if requested)
+        // Step 2: Meeting Notes (if requested)
         if (generateNotes && currentTranscript) {
-          setProgress("Generating executive meeting notes...", 85);
-          const notesResp = await fetch(genUrl, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              contents: [
-                {
-                  parts: [
-                    { text: `${MEETING_NOTES_PROMPT}\n\n--- FULL MERGED MEETING TRANSCRIPT ---\n${currentTranscript}` }
-                  ]
-                }
-              ],
-              generationConfig: {
-                responseMimeType: "application/json"
-              }
-            })
-          });
-
-          if (notesResp.ok) {
-            const notesData = await notesResp.json();
-            const rawJson = notesData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-            try {
-              const parsed = JSON.parse(rawJson);
-              currentNotes = parsed.notes_markdown || "";
-            } catch (e) {
-              currentNotes = rawJson;
-            }
+          try {
+            await generateMeetingNotesAction(apiKey, model, currentTranscript);
+          } catch (notesErr) {
+            console.error("Notes error:", notesErr);
+            showAlert("Transcription Complete", "Transcript generated successfully! Meeting notes failed: " + notesErr.message + "\n\nYou can click 'Generate Meeting Notes Now' in the Results tab to retry.");
           }
         }
 
         setProgress("Complete!", 100);
-        setTimeout(hideProgress, 1000);
+        setTimeout(hideProgress, 800);
 
         // Switch to Results tab
         renderResults();
@@ -607,7 +753,70 @@ Output ONLY a valid JSON object matching this schema:
         resultsContainer.innerText = currentTranscript || "No transcript available.";
       } else {
         resultsContainer.className = "markdown-content text-xs text-slate-200 select-text leading-relaxed max-h-[500px] overflow-y-auto custom-scroll pr-1";
-        resultsContainer.innerHTML = marked.parse(currentNotes || "No meeting notes available.");
+        if (currentNotes) {
+          resultsContainer.innerHTML = `
+            <div class="flex justify-end mb-2">
+              <button id="btn-regen-notes" class="text-[11px] text-sky-400 hover:text-sky-300 font-medium px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-700 hover:border-sky-500 transition">
+                🔄 Regenerate Notes
+              </button>
+            </div>
+            ${marked.parse(currentNotes)}
+          `;
+          const btnRegen = document.getElementById("btn-regen-notes");
+          if (btnRegen) {
+            btnRegen.onclick = async () => {
+              const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
+              const model = document.getElementById("select-model").value;
+              try {
+                btnRegen.disabled = true;
+                btnRegen.innerText = "⏳ Generating...";
+                await generateMeetingNotesAction(apiKey, model, currentTranscript);
+                hideProgress();
+              } catch (err) {
+                hideProgress();
+                showAlert("Notes Error", err.message);
+              } finally {
+                btnRegen.disabled = false;
+              }
+            };
+          }
+        } else {
+          resultsContainer.innerHTML = `
+            <div class="text-center py-10 space-y-3">
+              <div class="text-3xl">📝</div>
+              <div class="text-xs font-semibold text-slate-300">Executive Notes Not Generated Yet</div>
+              <p class="text-[11px] text-slate-400 max-w-xs mx-auto">
+                Generate structured meeting minutes, key decisions, and action items from this transcript with one tap.
+              </p>
+              <button id="btn-trigger-notes" class="px-4 py-2 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-sky-500/20 transition">
+                ⚡ Generate Meeting Notes Now
+              </button>
+            </div>
+          `;
+          const btnTrigger = document.getElementById("btn-trigger-notes");
+          if (btnTrigger) {
+            btnTrigger.onclick = async () => {
+              const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
+              if (!apiKey) {
+                showAlert("API Key Required", "Please enter your Gemini API key in Settings.");
+                switchTab("settings");
+                return;
+              }
+              const model = document.getElementById("select-model").value;
+              try {
+                btnTrigger.disabled = true;
+                btnTrigger.innerText = "⏳ Generating Notes...";
+                await generateMeetingNotesAction(apiKey, model, currentTranscript);
+                hideProgress();
+              } catch (err) {
+                hideProgress();
+                showAlert("Notes Error", err.message);
+              } finally {
+                btnTrigger.disabled = false;
+              }
+            };
+          }
+        }
       }
     }
 
