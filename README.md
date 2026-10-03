@@ -29,9 +29,47 @@ All of your data stays private and local on your machine:
 - `database.db`: A local SQLite database keeping track of your meeting history.
 - `recordings/`: The folder where all your raw `.wav` audio files and `.docx` notes are securely saved.
 
+## 📱 Mobile App (Android)
+
+Meeting Transcriber is also available as a standalone Android app!
+
+### 📥 Getting the Android App (.apk)
+1. Go to the [Actions tab on GitHub](https://github.com/MeshkatSaiam/meeting-transcriber/actions).
+2. Select the latest **Build Android APK** workflow run.
+3. Download the `meeting-transcriber-debug-apk` artifact.
+4. Extract the `.zip` and transfer/install the `.apk` on your Android device (enable "Install unknown apps" if prompted).
+
+### 🎙️ Recommended Workflow on Mobile
+1. Record your meeting using **[Fossify Voice Recorder](https://github.com/FossifyOrg/Voice-Recorder)** (handles background recording, lock-screen notifications, and incoming call interruptions reliably).
+2. Open **Meeting Transcriber** on your phone.
+3. Tap **Choose Audio File** and select your recorded audio (`.m4a`, `.mp3`, `.wav`, etc.).
+4. Tap **Start Transcription**.
+5. View your transcript and executive notes, copy them to your clipboard, or export them to `.docx`!
+
+---
+
 ## 🛠️ For Developers (Building from Source)
 If you want to run the python script directly or build a new `.exe`:
 1. Ensure Python 3.11+ is installed.
-2. Install dependencies: `kivy`, `kivymd`, `sounddevice`, `soundfile`, `google-generativeai`, `python-docx`, `ffmpeg-python` (Ensure FFmpeg is installed system-wide).
-3. Run directly: `python gui.py`
-4. Build the executable: `python -m PyInstaller --noconfirm MeetingTranscriber.spec`
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+3. Run desktop GUI:
+   ```bash
+   python main.py
+   # or directly:
+   python gui.py
+   ```
+4. Run mobile simulation view (portrait phone preview on desktop):
+   ```bash
+   python main.py --mobile
+   ```
+5. Build the Windows executable:
+   ```bash
+   python -m PyInstaller --noconfirm MeetingTranscriber.spec
+   ```
+6. Build the Android APK locally (requires Linux/WSL with Android SDK/NDK):
+   ```bash
+   buildozer android debug
+   ```

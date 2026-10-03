@@ -8,6 +8,9 @@ dist/
 app_settings.json
 database.db
 recordings/
+history.json
 *.spec
+!buildozer.spec
+!MeetingTranscriber.spec
 Manual test/
 voice_samples/

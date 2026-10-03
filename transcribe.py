@@ -26,6 +26,12 @@ if getattr(sys, "stderr", None) is not None and hasattr(sys.stderr, "encoding") 
 
 DEFAULT_MODEL = "gemini-3.6-flash"
 FALLBACK_MODEL = "gemini-3.5-flash-lite"
+AVAILABLE_MODELS = [
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3-pro",
+]
 MAX_RETRIES_PER_MODEL = 3
 MIN_CHUNK_DURATION = 3.0  # Minimum seconds required for a valid audio chunk
 
@@ -592,7 +598,23 @@ def apply_speaker_mapping_to_chunk(chunk_text: str, chunk_mappings: dict[str, di
 
     return temp_text
 
+def is_ffmpeg_available() -> bool:
+    """Checks if both ffmpeg and ffprobe CLI tools are available in the system PATH."""
+    import shutil
+    return shutil.which("ffmpeg") is not None and shutil.which("ffprobe") is not None
+
 def get_audio_duration(audio_path: Path) -> float:
+    audio_path = Path(audio_path)
+    if not is_ffmpeg_available():
+        try:
+            if audio_path.suffix.lower() == ".wav":
+                import wave
+                with wave.open(str(audio_path), 'rb') as w:
+                    return w.getnframes() / float(w.getframerate())
+        except Exception:
+            pass
+        return 0.0
+
     cmd = [
         "ffprobe",
         "-v", "error",
@@ -1519,6 +1541,80 @@ def run_transcription_pipeline(
 
     converted_dir = Path("converted")
     output_dir = Path("output")
+
+    # Direct Gemini File API flow when FFmpeg is not available (e.g. mobile/Android without bundled binary)
+    if not is_ffmpeg_available():
+        log("[Notice] FFmpeg is not detected on this system. Using Gemini Direct File Transcription mode.")
+        set_status("Uploading audio directly to Gemini...", 0, 1)
+        client = genai.Client(api_key=api_key)
+        uploaded = client.files.upload(file=str(input_file))
+        while uploaded.state.name == "PROCESSING":
+            if cancel_event and cancel_event.is_set():
+                raise TranscriptionCancelledException("Transcription cancelled by user.")
+            time.sleep(1.0)
+            uploaded = client.files.get(name=uploaded.name)
+
+        if cancel_event and cancel_event.is_set():
+            raise TranscriptionCancelledException("Transcription cancelled by user.")
+
+        set_status("Transcribing audio with Gemini...", 0, 1)
+        last_err = None
+        final_merged_transcript = ""
+        used_model = model
+        for m in models_to_try:
+            try:
+                if api_call_callback:
+                    api_call_callback()
+                resp = client.models.generate_content(
+                    model=m,
+                    contents=[uploaded, TRANSCRIPTION_PROMPT]
+                )
+                final_merged_transcript = resp.text.strip()
+                used_model = m
+                break
+            except Exception as e:
+                last_err = e
+                log(f"[Direct Transcription Error on '{m}']: {e}")
+
+        if not final_merged_transcript:
+            raise RuntimeError(f"Transcription failed across candidate models: {last_err}")
+
+        # Clean up uploaded Gemini file to respect user privacy and storage quota
+        try:
+            client.files.delete(name=uploaded.name)
+        except Exception:
+            pass
+
+        total_duration = get_audio_duration(input_file)
+        metadata = {
+            "duration": format_timestamp(total_duration) if total_duration > 0 else "N/A",
+            "model": used_model,
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        docx_path = None
+        if auto_save:
+            output_dir.mkdir(parents=True, exist_ok=True)
+            docx_filename = f"{input_file.stem}.docx"
+            docx_path = output_dir / docx_filename
+            save_transcript_docx(
+                output_path=docx_path,
+                title=input_file.stem,
+                merged_transcript=final_merged_transcript,
+                metadata=metadata
+            )
+            log(f"Merged docx saved successfully to: {docx_path}")
+
+        return {
+            "transcript": final_merged_transcript,
+            "total_duration": total_duration,
+            "title": input_file.stem,
+            "metadata": metadata,
+            "suggested_filename": f"{input_file.stem}.docx",
+            "output_dir": output_dir,
+            "docx_path": docx_path,
+            "intermediate_files": []
+        }
 
     set_status("Converting audio to 16kHz mono MP3...", 0, 1)
     master_audio = convert_to_mono_16k(input_file, converted_dir)
