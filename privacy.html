@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy - Meeting Transcriber</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-2xl mx-auto space-y-6 bg-slate-900 border border-slate-800 p-8 rounded-2xl shadow-xl mt-8">
+    <div class="flex items-center space-x-3 border-b border-slate-800 pb-4">
+      <span class="text-3xl">🎙️</span>
+      <div>
+        <h1 class="text-xl font-bold text-white">Meeting Transcriber Privacy Policy</h1>
+        <p class="text-xs text-slate-400">Last updated: October 2026</p>
+      </div>
+    </div>
+
+    <section class="space-y-2 text-sm text-slate-300 leading-relaxed">
+      <h2 class="text-base font-semibold text-sky-400">1. Overview</h2>
+      <p>
+        Meeting Transcriber is a privacy-first web application designed for verbatim meeting transcription and speaker diarization. We respect your personal data and maintain strict privacy standards.
+      </p>
+    </section>
+
+    <section class="space-y-2 text-sm text-slate-300 leading-relaxed">
+      <h2 class="text-base font-semibold text-sky-400">2. Information We Collect</h2>
+      <p>
+        • <strong>Account Information</strong>: When you authenticate using Google Sign-In or email, we receive your email address and basic profile name to create and manage your secure account session.
+      </p>
+      <p>
+        • <strong>Speaker Voice Profiles</strong>: Voice sample clips you choose to enroll are encrypted and stored in your private database partition protected by PostgreSQL Row-Level Security (RLS). No other user can access or view your voice samples.
+      </p>
+      <p>
+        • <strong>Audio Recordings & Transcripts</strong>: Audio files you transcribe are processed client-side in your browser and sent directly to Google Gemini API for transcription. Your audio files are never permanently stored on external web servers.
+      </p>
+    </section>
+
+    <section class="space-y-2 text-sm text-slate-300 leading-relaxed">
+      <h2 class="text-base font-semibold text-sky-400">3. Data Sharing & Third Parties</h2>
+      <p>
+        We do not sell, rent, or distribute your personal data, voice samples, or transcripts to any third-party advertisers. All cloud synchronization is powered by Supabase with end-to-end Row-Level Security isolation.
+      </p>
+    </section>
+
+    <section class="space-y-2 text-sm text-slate-300 leading-relaxed">
+      <h2 class="text-base font-semibold text-sky-400">4. Contact & Account Deletion</h2>
+      <p>
+        You may delete any enrolled voice profiles directly inside the application at any time. For questions regarding this privacy policy, you may contact the maintainer at <code class="text-sky-300">meshkatsaiam@gmail.com</code>.
+      </p>
+    </section>
+
+    <div class="pt-4 border-t border-slate-800 flex justify-between items-center text-xs text-slate-500">
+      <a href="index.html" class="text-sky-400 hover:underline">← Return to Meeting Transcriber</a>
+      <span>Open Source / GitHub Pages</span>
+    </div>
+  </div>
+</body>
+</html>

@@ -52,26 +52,33 @@
     .markdown-content ol { list-style-type: decimal; padding-left: 1.25rem; margin-bottom: 0.75rem; }
     .markdown-content li { margin-bottom: 0.25rem; color: #E2E8F0; }
     .markdown-content p { margin-bottom: 0.75rem; color: #CBD5E1; line-height: 1.6; }
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+    }
     .markdown-content strong { color: #F8FAFC; }
   </style>
 </head>
-<body class="h-screen flex flex-col overflow-hidden">
+<body class="h-full h-[100dvh] max-h-[100dvh] flex flex-col overflow-hidden bg-slate-950">
 
   <!-- Top Header -->
-  <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between flex-shrink-0">
+  <header class="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between flex-shrink-0 z-30">
     <div class="flex items-center space-x-2">
       <div class="w-8 h-8 rounded-lg bg-sky-500/20 border border-sky-400 flex items-center justify-center text-sky-400 font-bold text-sm">
         🎙️
       </div>
       <div>
-        <h1 class="text-base font-bold tracking-tight text-white leading-tight">Meeting Transcriber</h1>
-        <p class="text-xs text-slate-400">Gemini Verbatim & Diarization</p>
+        <h1 class="text-sm sm:text-base font-bold tracking-tight text-white leading-tight">Meeting Transcriber</h1>
+        <p class="text-[11px] text-slate-400">Gemini Verbatim & Diarization</p>
       </div>
     </div>
 
     <div class="flex items-center space-x-2">
       <!-- Cloud Sync Status Pill -->
-      <button id="btn-header-sync" class="text-[11px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-full transition flex items-center space-x-1.5 shadow-sm" title="Cloud Sync Account">
+      <button id="btn-header-sync" class="text-[11px] bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-2.5 py-1 rounded-full transition flex items-center space-x-1.5 shadow-sm active:scale-95 cursor-pointer" title="Cloud Sync Account">
         <span id="header-sync-dot" class="w-2 h-2 rounded-full bg-slate-500"></span>
         <span id="header-sync-text">Local</span>
       </button>
@@ -83,8 +90,24 @@
     </div>
   </header>
 
+  <!-- Top Navigation Tabs (Dual Navigation for foolproof mobile access) -->
+  <nav class="bg-slate-900/95 border-b border-slate-800 px-3 py-1.5 flex items-center justify-around flex-shrink-0 z-30">
+    <button type="button" id="top-nav-transcribe" class="flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-sky-500 text-white transition flex items-center justify-center space-x-1 shadow-sm active:scale-95 touch-manipulation cursor-pointer">
+      <span class="text-sm">🎙️</span>
+      <span>Transcribe</span>
+    </button>
+    <button type="button" id="top-nav-results" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer ml-1.5">
+      <span class="text-sm">📋</span>
+      <span>Results & Notes</span>
+    </button>
+    <button type="button" id="top-nav-settings" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer ml-1.5">
+      <span class="text-sm">⚙️</span>
+      <span>Settings</span>
+    </button>
+  </nav>
+
   <!-- Main Scrollable Body -->
-  <main class="flex-1 overflow-y-auto custom-scroll p-4 max-w-lg mx-auto w-full">
+  <main class="flex-1 overflow-y-auto custom-scroll p-4 pb-20 max-w-lg mx-auto w-full">
 
     <!-- TAB 1: TRANSCRIBE -->
     <section id="tab-transcribe" class="space-y-4">
@@ -374,6 +397,23 @@
               <span>🚪 Sign Out</span>
             </button>
           </div>
+
+          <!-- Google Cloud OAuth Management & Production Switch -->
+          <div class="pt-2 border-t border-slate-700/60 space-y-2">
+            <span class="text-[11px] font-bold text-slate-300 block">Google Account Access</span>
+            <div class="grid grid-cols-2 gap-2">
+              <a href="https://console.cloud.google.com/auth/audience?project=project-f1e17dc0-ae0e-4fd1-813" target="_blank" class="py-2 px-2 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white text-[11px] font-medium rounded-xl transition text-center flex items-center justify-center space-x-1 shadow-sm">
+                <span>➕ Add Test User</span>
+              </a>
+              <a href="https://console.cloud.google.com/auth/branding?project=project-f1e17dc0-ae0e-4fd1-813" target="_blank" class="py-2 px-2 bg-indigo-600/90 hover:bg-indigo-500 active:scale-95 text-white text-[11px] font-medium rounded-xl transition text-center flex items-center justify-center space-x-1 shadow-sm">
+                <span>🚀 Go Public</span>
+              </a>
+            </div>
+            <p class="text-[10px] text-slate-400 leading-tight">
+              • <strong>Add Test User</strong>: Add an email to allow instant sign-in while in Testing mode.<br>
+              • <strong>Go Public</strong>: Publish app to "In production" so any Gmail user can sign in automatically without manual invites!
+            </p>
+          </div>
         </div>
       </div>
 
@@ -397,24 +437,24 @@
         <span class="text-xs font-bold uppercase tracking-wider text-sky-400 block mb-1">About</span>
         <p>• <strong>Hosting</strong>: 100% Free on GitHub Pages</p>
         <p>• <strong>Language</strong>: Verbatim Bangla (বাংলা) & English Diarization</p>
-        <p>• <strong>Offline Support</strong>: Progressive Web App (PWA)</p>
+        <p>• <strong>Privacy</strong>: <a href="privacy.html" class="text-sky-400 hover:underline">Privacy Policy</a></p>
       </div>
     </section>
 
   </main>
 
   <!-- Bottom Navigation Bar -->
-  <nav class="bg-slate-900 border-t border-slate-800 px-6 py-2 flex justify-around items-center flex-shrink-0">
-    <button id="nav-transcribe" class="flex flex-col items-center space-y-1 text-sky-400">
-      <span class="text-lg">🎙️</span>
+  <nav class="bg-slate-900 border-t border-slate-800 px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex justify-around items-center flex-shrink-0 z-40 relative shadow-2xl">
+    <button type="button" id="nav-transcribe" class="flex-1 py-1 flex flex-col items-center space-y-1 text-sky-400 active:scale-95 transition cursor-pointer touch-manipulation">
+      <span class="text-xl">🎙️</span>
       <span class="text-[10px] font-bold">Transcribe</span>
     </button>
-    <button id="nav-results" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-white">
-      <span class="text-lg">📋</span>
-      <span class="text-[10px] font-semibold">Results</span>
+    <button type="button" id="nav-results" class="flex-1 py-1 flex flex-col items-center space-y-1 text-slate-400 hover:text-white active:scale-95 transition cursor-pointer touch-manipulation">
+      <span class="text-xl">📋</span>
+      <span class="text-[10px] font-semibold">Results & Notes</span>
     </button>
-    <button id="nav-settings" class="flex flex-col items-center space-y-1 text-slate-400 hover:text-white">
-      <span class="text-lg">⚙️</span>
+    <button type="button" id="nav-settings" class="flex-1 py-1 flex flex-col items-center space-y-1 text-slate-400 hover:text-white active:scale-95 transition cursor-pointer touch-manipulation">
+      <span class="text-xl">⚙️</span>
       <span class="text-[10px] font-semibold">Settings</span>
     </button>
   </nav>
@@ -559,14 +599,29 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     // Tab Navigation
     function switchTab(tabId) {
       ["transcribe", "results", "settings"].forEach(t => {
-        document.getElementById(`tab-${t}`).classList.toggle("hidden", t !== tabId);
+        const sec = document.getElementById(`tab-${t}`);
+        if (sec) sec.classList.toggle("hidden", t !== tabId);
+
+        // Update Bottom Nav
         const navBtn = document.getElementById(`nav-${t}`);
-        if (t === tabId) {
-          navBtn.classList.add("text-sky-400");
-          navBtn.classList.remove("text-slate-400");
-        } else {
-          navBtn.classList.remove("text-sky-400");
-          navBtn.classList.add("text-slate-400");
+        if (navBtn) {
+          if (t === tabId) {
+            navBtn.classList.add("text-sky-400");
+            navBtn.classList.remove("text-slate-400");
+          } else {
+            navBtn.classList.remove("text-sky-400");
+            navBtn.classList.add("text-slate-400");
+          }
+        }
+
+        // Update Top Nav
+        const topNavBtn = document.getElementById(`top-nav-${t}`);
+        if (topNavBtn) {
+          if (t === tabId) {
+            topNavBtn.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-sky-500 text-white transition flex items-center justify-center space-x-1 shadow-sm active:scale-95 touch-manipulation cursor-pointer" + (t !== "transcribe" ? " ml-1.5" : "");
+          } else {
+            topNavBtn.className = "flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer" + (t !== "transcribe" ? " ml-1.5" : "");
+          }
         }
       });
     }
@@ -574,6 +629,13 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     document.getElementById("nav-transcribe").onclick = () => switchTab("transcribe");
     document.getElementById("nav-results").onclick = () => switchTab("results");
     document.getElementById("nav-settings").onclick = () => switchTab("settings");
+
+    const topNavTranscribe = document.getElementById("top-nav-transcribe");
+    const topNavResults = document.getElementById("top-nav-results");
+    const topNavSettings = document.getElementById("top-nav-settings");
+    if (topNavTranscribe) topNavTranscribe.onclick = () => switchTab("transcribe");
+    if (topNavResults) topNavResults.onclick = () => switchTab("results");
+    if (topNavSettings) topNavSettings.onclick = () => switchTab("settings");
 
     // File vs Live Mode Toggle
     const btnModeFile = document.getElementById("btn-mode-file");
