@@ -6,6 +6,13 @@ Pass `--mobile` on desktop to simulate mobile phone view.
 
 import sys
 import os
+
+# Check for --mobile flag before Kivy parses sys.argv
+IS_MOBILE_REQUESTED = "--mobile" in sys.argv
+if IS_MOBILE_REQUESTED:
+    sys.argv.remove("--mobile")
+os.environ["KIVY_NO_ARGS"] = "1"
+
 import traceback
 from kivy.app import App
 from kivy.utils import platform
@@ -116,7 +123,7 @@ class ErrorApp(App):
 def main():
     try:
         setup_ota_path()
-        is_mobile_target = (platform == "android") or ("--mobile" in sys.argv)
+        is_mobile_target = (platform == "android") or IS_MOBILE_REQUESTED
 
         if is_mobile_target:
             if platform != "android":
