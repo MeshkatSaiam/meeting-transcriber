@@ -95,12 +95,14 @@
 
         <!-- File Upload Area -->
         <div id="section-file-upload" class="space-y-3">
-          <label for="input-file" class="border-2 border-dashed border-slate-600 hover:border-sky-400 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer transition bg-slate-900/40">
+          <label for="input-file" class="border-2 border-dashed border-slate-600 hover:border-sky-400 rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition bg-slate-900/40 text-center">
             <span class="text-3xl mb-1">🎵</span>
-            <span class="text-xs font-medium text-slate-200" id="lbl-file-name">Tap to select audio recording</span>
-            <span class="text-[11px] text-slate-400 mt-1">Supports .m4a, .mp3, .wav, .aac, .ogg, .flac</span>
-            <input type="file" id="input-file" accept="audio/*" class="hidden">
+            <span class="text-xs font-medium text-slate-200" id="lbl-file-name">Tap to select audio file(s)</span>
+            <span class="text-[11px] text-slate-400 mt-1">Select one or multiple recordings (.m4a, .mp3, .wav, etc.)</span>
+            <input type="file" id="input-file" accept="audio/*" multiple class="hidden">
           </label>
+          <!-- List of Selected Audio Files -->
+          <div id="file-list-container" class="hidden space-y-1.5 max-h-36 overflow-y-auto custom-scroll text-xs"></div>
         </div>
 
         <!-- Live Mic Recording Area -->
@@ -181,17 +183,36 @@
           </div>
         </div>
 
-        <!-- Export Buttons -->
-        <div class="pt-4 border-t border-slate-700/80 flex items-center justify-between gap-2">
-          <button id="btn-copy" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
-            <span>📋 Copy</span>
-          </button>
-          <button id="btn-download-txt" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
-            <span>💾 Save .txt</span>
-          </button>
-          <button id="btn-download-md" class="flex-1 py-2.5 bg-slate-700 hover:bg-slate-600 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1">
-            <span>📑 Save .md</span>
-          </button>
+        <!-- Export & Native Forwarding Toolbar -->
+        <div class="pt-3 border-t border-slate-700/80 space-y-2">
+          <!-- Primary Actions -->
+          <div class="grid grid-cols-3 gap-2">
+            <button id="btn-copy" class="py-2.5 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1 shadow-sm">
+              <span>📋 Copy</span>
+            </button>
+            <button id="btn-native-share" class="py-2.5 bg-sky-600 hover:bg-sky-500 active:scale-95 text-white font-semibold text-xs rounded-xl transition flex items-center justify-center space-x-1 shadow-sm">
+              <span>📤 Share...</span>
+            </button>
+            <button id="btn-download-md" class="py-2.5 bg-slate-700 hover:bg-slate-600 active:scale-95 text-white font-medium text-xs rounded-xl transition flex items-center justify-center space-x-1 shadow-sm">
+              <span>💾 Save .md</span>
+            </button>
+          </div>
+
+          <!-- Native App Forwarding -->
+          <div class="grid grid-cols-4 gap-1.5 pt-1">
+            <button id="btn-whatsapp" class="py-2 bg-emerald-600/90 hover:bg-emerald-500 active:scale-95 text-white text-[11px] font-semibold rounded-xl transition flex items-center justify-center space-x-1 shadow-sm" title="Send to WhatsApp">
+              <span>💬 WhatsApp</span>
+            </button>
+            <button id="btn-email" class="py-2 bg-indigo-600/90 hover:bg-indigo-500 active:scale-95 text-white text-[11px] font-semibold rounded-xl transition flex items-center justify-center space-x-1 shadow-sm" title="Send via Email">
+              <span>✉️ Email</span>
+            </button>
+            <button id="btn-open-gemini" class="py-2 bg-blue-600/90 hover:bg-blue-500 active:scale-95 text-white text-[11px] font-semibold rounded-xl transition flex items-center justify-center space-x-1 shadow-sm" title="Copy & Edit in Gemini">
+              <span>✨ Gemini</span>
+            </button>
+            <button id="btn-open-claude" class="py-2 bg-amber-600/90 hover:bg-amber-500 active:scale-95 text-white text-[11px] font-semibold rounded-xl transition flex items-center justify-center space-x-1 shadow-sm" title="Copy & Edit in Claude">
+              <span>🟣 Claude</span>
+            </button>
+          </div>
         </div>
       </div>
     </section>
@@ -307,7 +328,7 @@ Structure your response using these exact sections:
 Language Rule: Preserve original context and names. For Bengali discussions, preserve Bengali terminology in native script (বাংলা).`;
 
     // App State
-    let selectedAudioFile = null;
+    let selectedAudioFiles = [];
     let currentTranscript = "";
     let currentNotes = "";
     let currentResultsSubtab = "transcript";
@@ -364,19 +385,56 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       sectionLiveRecord.classList.remove("hidden");
     };
 
-    // File Input Selection
+    // File Input Selection (Single or Multiple)
     const inputFile = document.getElementById("input-file");
     const lblFileName = document.getElementById("lbl-file-name");
+    const fileListContainer = document.getElementById("file-list-container");
+
+    function updateFileListUI() {
+      if (selectedAudioFiles.length === 0) {
+        lblFileName.innerText = "Tap to select audio file(s)";
+        fileListContainer.classList.add("hidden");
+        fileListContainer.innerHTML = "";
+        return;
+      }
+
+      const totalBytes = selectedAudioFiles.reduce((acc, f) => acc + f.size, 0);
+      const totalMb = (totalBytes / (1024 * 1024)).toFixed(1);
+
+      if (selectedAudioFiles.length === 1) {
+        const f = selectedAudioFiles[0];
+        const sz = (f.size / (1024 * 1024)).toFixed(1);
+        lblFileName.innerText = `${f.name} (${sz} MB${f.size > 18 * 1024 * 1024 ? " — Auto-Compress ⚡" : ""})`;
+        fileListContainer.classList.add("hidden");
+      } else {
+        lblFileName.innerText = `📁 ${selectedAudioFiles.length} audio files chosen (${totalMb} MB total)`;
+        fileListContainer.classList.remove("hidden");
+        fileListContainer.innerHTML = selectedAudioFiles.map((f, idx) => {
+          const sz = (f.size / (1024 * 1024)).toFixed(1);
+          const needsCompress = f.size > 18 * 1024 * 1024 ? " ⚡" : "";
+          return `
+            <div class="flex items-center justify-between bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700/80">
+              <span class="truncate flex-1 text-slate-200 mr-2 font-medium">${idx + 1}. ${f.name}</span>
+              <span class="text-[10px] text-sky-400 font-mono flex-shrink-0">${sz} MB${needsCompress}</span>
+              <button onclick="removeSelectedFile(${idx})" class="ml-2.5 text-slate-400 hover:text-rose-400 font-bold px-1 py-0.5 rounded">✕</button>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    window.removeSelectedFile = (idx) => {
+      selectedAudioFiles.splice(idx, 1);
+      updateFileListUI();
+    };
 
     inputFile.onchange = (e) => {
-      if (e.target.files && e.target.files[0]) {
-        selectedAudioFile = e.target.files[0];
-        const szMb = (selectedAudioFile.size / (1024 * 1024)).toFixed(1);
-        if (selectedAudioFile.size > 18 * 1024 * 1024) {
-          lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB — Auto-Compress ⚡)`;
-          showAlert("Large Audio Detected", `This audio is ${szMb} MB. When you tap Start Transcription, the app will automatically compress it on your device to speech-grade MP3 before transcribing.`);
-        } else {
-          lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB)`;
+      if (e.target.files && e.target.files.length > 0) {
+        selectedAudioFiles = Array.from(e.target.files);
+        updateFileListUI();
+        const hasLarge = selectedAudioFiles.some(f => f.size > 18 * 1024 * 1024);
+        if (hasLarge) {
+          showAlert("Auto-Compression Active", "One or more audio files exceed 18 MB. The app will automatically optimize and compress them into speech-grade MP3 before uploading.");
         }
       }
     };
@@ -406,8 +464,9 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           const ext = mimeType.includes("mp4") ? "m4a" : "webm";
           const blob = new Blob(recordedChunks, { type: mimeType });
           const szMb = (blob.size / (1024 * 1024)).toFixed(2);
-          selectedAudioFile = new File([blob], `Recording_${new Date().toISOString().slice(0,10)}_${Date.now()}.${ext}`, { type: mimeType });
-          lblFileName.innerText = `Recorded: ${selectedAudioFile.name} (${szMb} MB)`;
+          const recFile = new File([blob], `Recording_${new Date().toISOString().slice(0,10)}_${Date.now()}.${ext}`, { type: mimeType });
+          selectedAudioFiles = [recFile];
+          updateFileListUI();
           btnModeFile.click(); // switch view back
           showAlert("Recording Captured", `Voice recording ready for transcription! (Size: ${szMb} MB)`);
         };
@@ -647,7 +706,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       renderResults();
     }
 
-    // Google Gemini API Upload & Transcribe Flow
+    // Google Gemini API Upload & Transcribe Flow (Multi-File Support)
     async function executeTranscription() {
       const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
       if (!apiKey) {
@@ -655,8 +714,8 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         switchTab("settings");
         return;
       }
-      if (!selectedAudioFile) {
-        showAlert("No File Selected", "Please choose an audio file or record live speech first.");
+      if (selectedAudioFiles.length === 0) {
+        showAlert("No File Selected", "Please choose audio file(s) or record live speech first.");
         return;
       }
 
@@ -668,60 +727,86 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       btnStart.classList.add("opacity-50");
 
       try {
-        let fileToUpload = selectedAudioFile;
-        const origSizeMb = selectedAudioFile.size / (1024 * 1024);
+        let fullTranscripts = [];
+        const totalFiles = selectedAudioFiles.length;
 
-        // Auto-compress on device if > 18MB or uncompressed large audio
-        if (origSizeMb > 18 || (selectedAudioFile.name.endsWith(".wav") && origSizeMb > 8)) {
-          setProgress(`Compressing audio (${origSizeMb.toFixed(1)} MB)...`, 5);
-          fileToUpload = await compressAudioFile(selectedAudioFile, (msg, pct) => setProgress(msg, pct));
-        }
+        for (let i = 0; i < totalFiles; i++) {
+          const currentFile = selectedAudioFiles[i];
+          const fileNum = i + 1;
+          const basePct = Math.round((i / totalFiles) * 75);
+          const stepWeight = 75 / totalFiles;
 
-        const finalSizeMb = fileToUpload.size / (1024 * 1024);
-        if (finalSizeMb > 19.5) {
-          throw new Error(`Compressed file is ${finalSizeMb.toFixed(1)} MB, exceeding the 19.5 MB browser limit. Please trim the recording.`);
-        }
+          let fileToUpload = currentFile;
+          const origSizeMb = currentFile.size / (1024 * 1024);
 
-        setProgress("Reading audio data...", 78);
-        const base64Data = await fileToBase64(fileToUpload);
-        const audioPart = {
-          inlineData: {
-            mimeType: fileToUpload.type || "audio/mp3",
-            data: base64Data
+          // Auto-compress on device if > 18MB or uncompressed large audio
+          if (origSizeMb > 18 || (currentFile.name.endsWith(".wav") && origSizeMb > 8)) {
+            setProgress(`File ${fileNum}/${totalFiles}: Compressing (${origSizeMb.toFixed(1)} MB)...`, basePct + Math.round(stepWeight * 0.15));
+            fileToUpload = await compressAudioFile(currentFile, (msg, pct) => {
+              setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.5));
+            });
           }
-        };
 
-        // Step 1: Transcribe via Gemini
-        setProgress("Transcribing with Gemini AI...", 82);
-        const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        const genResp = await fetch(genUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                parts: [
-                  audioPart,
-                  { text: TRANSCRIPTION_PROMPT }
-                ]
-              }
-            ]
-          })
-        });
+          const finalSizeMb = fileToUpload.size / (1024 * 1024);
+          if (finalSizeMb > 19.5) {
+            throw new Error(`File ${fileNum} is ${finalSizeMb.toFixed(1)} MB after compression, exceeding the 19.5 MB limit.`);
+          }
 
-        if (!genResp.ok) {
-          const errText = await genResp.text();
-          throw new Error(`Gemini Transcription Error (${genResp.status}): ${errText}`);
+          setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.6));
+          const base64Data = await fileToBase64(fileToUpload);
+          const audioPart = {
+            inlineData: {
+              mimeType: fileToUpload.type || "audio/mp3",
+              data: base64Data
+            }
+          };
+
+          // Step 1: Transcribe via Gemini
+          setProgress(`File ${fileNum}/${totalFiles}: Transcribing with Gemini...`, basePct + Math.round(stepWeight * 0.8));
+          const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+          const genResp = await fetch(genUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    audioPart,
+                    { text: TRANSCRIPTION_PROMPT }
+                  ]
+                }
+              ]
+            })
+          });
+
+          if (!genResp.ok) {
+            const errText = await genResp.text();
+            throw new Error(`Gemini Transcription Error on file ${fileNum} (${currentFile.name}): ${errText}`);
+          }
+
+          const genData = await genResp.json();
+          const partTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+          if (!partTranscript) {
+            const finishReason = genData.candidates?.[0]?.finishReason || "Unknown";
+            throw new Error(`No transcript generated for file ${fileNum} (Finish reason: ${finishReason}).`);
+          }
+
+          if (totalFiles > 1) {
+            fullTranscripts.push(`--- [Part ${fileNum} of ${totalFiles}: ${currentFile.name}] ---\n\n${partTranscript}`);
+          } else {
+            fullTranscripts.push(partTranscript);
+          }
+
+          // Delay between multiple files to respect Gemini API rate limits
+          if (i < totalFiles - 1) {
+            setProgress(`Waiting for API rate limit before next file...`, basePct + Math.round(stepWeight));
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
 
-        const genData = await genResp.json();
-        currentTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-        if (!currentTranscript) {
-          const finishReason = genData.candidates?.[0]?.finishReason || "Unknown";
-          throw new Error(`No transcript generated by Gemini (Finish reason: ${finishReason}).`);
-        }
+        currentTranscript = fullTranscripts.join("\n\n\n");
 
-        // Step 2: Meeting Notes (if requested)
+        // Step 2: Executive Meeting Notes across combined transcript (if requested)
         if (generateNotes && currentTranscript) {
           try {
             await generateMeetingNotesAction(apiKey, model, currentTranscript);
@@ -845,15 +930,122 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       renderResults();
     };
 
-    // Copy to Clipboard
+    // Helper to get active text content
+    function getActiveResultsText() {
+      if (currentResultsSubtab === "notes") {
+        return currentNotes || currentTranscript || "";
+      }
+      return currentTranscript || "";
+    }
+
+    function getActiveTitle() {
+      const isNotes = currentResultsSubtab === "notes";
+      return isNotes ? "Executive Meeting Notes & Action Items" : "Meeting Diarized Transcript";
+    }
+
+    // 1. Copy Action
     document.getElementById("btn-copy").onclick = () => {
-      const text = currentResultsSubtab === "transcript" ? currentTranscript : currentNotes;
+      const text = getActiveResultsText();
       if (!text) {
-        showAlert("Empty", "No text to copy.");
+        showAlert("Empty", "No transcription or notes to copy yet.");
         return;
       }
       navigator.clipboard.writeText(text).then(() => {
-        showAlert("Copied", "Copied to clipboard successfully!");
+        showAlert("Copied!", "Content copied to clipboard successfully.");
+      }).catch(() => {
+        showAlert("Copy Failed", "Please manually select and copy the text.");
+      });
+    };
+
+    // 2. Native System Share Sheet (WhatsApp, Gmail, Slack, Drive, Samsung Notes, etc.)
+    document.getElementById("btn-native-share").onclick = async () => {
+      const text = getActiveResultsText();
+      if (!text) {
+        showAlert("Empty", "No transcription or notes to share yet.");
+        return;
+      }
+      if (navigator.share) {
+        try {
+          await navigator.share({
+            title: getActiveTitle(),
+            text: text
+          });
+        } catch (err) {
+          if (err.name !== "AbortError") {
+            navigator.clipboard.writeText(text).catch(() => {});
+            showAlert("Copied", "Content copied to clipboard!");
+          }
+        }
+      } else {
+        navigator.clipboard.writeText(text).then(() => {
+          showAlert("Copied to Clipboard", "Web Share not supported by this browser. Text has been copied to your clipboard!");
+        });
+      }
+    };
+
+    // 3. Direct WhatsApp Share
+    document.getElementById("btn-whatsapp").onclick = () => {
+      const text = getActiveResultsText();
+      if (!text) {
+        showAlert("Empty", "No text to send.");
+        return;
+      }
+      if (navigator.share) {
+        navigator.share({
+          title: getActiveTitle(),
+          text: text
+        }).catch(() => {});
+      } else {
+        const snippet = encodeURIComponent(text.slice(0, 3000));
+        window.open(`https://api.whatsapp.com/send?text=${snippet}`, "_blank");
+      }
+    };
+
+    // 4. Send via Native Email Composer
+    document.getElementById("btn-email").onclick = () => {
+      const text = getActiveResultsText();
+      if (!text) {
+        showAlert("Empty", "No text to email.");
+        return;
+      }
+      const subject = encodeURIComponent(getActiveTitle());
+      const body = encodeURIComponent(text.slice(0, 4000));
+      window.location.href = `mailto:?subject=${subject}&body=${body}`;
+    };
+
+    // 5. Open & Edit in Google Gemini
+    document.getElementById("btn-open-gemini").onclick = () => {
+      const text = getActiveResultsText();
+      if (!text) {
+        showAlert("Empty", "No content to process in Gemini.");
+        return;
+      }
+      const prompt = `Here is the meeting ${currentResultsSubtab === 'notes' ? 'executive notes' : 'transcript'}:\n\n${text}\n\n---\nPlease review the above meeting and help me:`;
+      navigator.clipboard.writeText(prompt).then(() => {
+        showAlert("Copied for Gemini! ✨", "Meeting content copied to clipboard.\n\nOpening Gemini now — just tap and paste!");
+        setTimeout(() => {
+          window.open("https://gemini.google.com/app", "_blank");
+        }, 1100);
+      }).catch(() => {
+        window.open("https://gemini.google.com/app", "_blank");
+      });
+    };
+
+    // 6. Open & Edit in Anthropic Claude
+    document.getElementById("btn-open-claude").onclick = () => {
+      const text = getActiveResultsText();
+      if (!text) {
+        showAlert("Empty", "No content to process in Claude.");
+        return;
+      }
+      const prompt = `Here is the meeting ${currentResultsSubtab === 'notes' ? 'executive notes' : 'transcript'}:\n\n${text}\n\n---\nPlease review the above meeting and help me:`;
+      navigator.clipboard.writeText(prompt).then(() => {
+        showAlert("Copied for Claude! 🟣", "Meeting content copied to clipboard.\n\nOpening Claude now — just tap and paste!");
+        setTimeout(() => {
+          window.open("https://claude.ai/new", "_blank");
+        }, 1100);
+      }).catch(() => {
+        window.open("https://claude.ai/new", "_blank");
       });
     };
 
@@ -874,16 +1066,11 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       URL.revokeObjectURL(url);
     }
 
-    document.getElementById("btn-download-txt").onclick = () => {
-      const baseName = selectedAudioFile ? selectedAudioFile.name.replace(/\.[^/.]+$/, "") : "Meeting";
-      const fullText = `# Diarized Transcript\n\n${currentTranscript}\n\n# Meeting Notes\n\n${currentNotes}`;
-      downloadFile(fullText, `${baseName}_transcript.txt`, "text/plain;charset=utf-8");
-    };
-
+    // 7. Save .md File
     document.getElementById("btn-download-md").onclick = () => {
-      const baseName = selectedAudioFile ? selectedAudioFile.name.replace(/\.[^/.]+$/, "") : "Meeting";
-      const fullText = `# Meeting Transcript & Notes\n\n## Diarized Transcript\n\n${currentTranscript}\n\n## Executive Meeting Notes\n\n${currentNotes}`;
-      downloadFile(fullText, `${baseName}_notes.md`, "text/markdown;charset=utf-8");
+      const primaryName = selectedAudioFiles.length > 0 ? selectedAudioFiles[0].name.replace(/\.[^/.]+$/, "") : "Meeting";
+      const fullText = `# Meeting Diarized Transcript & Executive Notes\n\n## Executive Notes\n\n${currentNotes || "No notes generated"}\n\n## Diarized Transcript\n\n${currentTranscript || "No transcript generated"}`;
+      downloadFile(fullText, `${primaryName}_notes.md`, "text/markdown;charset=utf-8");
     };
   </script>
 </body>
