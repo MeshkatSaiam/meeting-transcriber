@@ -120,6 +120,64 @@
         </div>
       </div>
 
+      <!-- Card: Audio Preprocessing & Enhancement -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Audio Preprocessing</span>
+          <span class="text-[10px] bg-slate-700 text-slate-300 px-2 py-0.5 rounded-full font-mono">DSP Engine</span>
+        </div>
+
+        <div class="space-y-2.5">
+          <!-- Normalization & Volume Boost -->
+          <div class="flex items-center justify-between">
+            <div>
+              <div class="text-xs font-medium text-slate-200">Volume Normalization & Boost</div>
+              <div class="text-[11px] text-slate-400">Dynamically balances quiet & distant speakers</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="chk-audio-normalize" class="sr-only peer" checked>
+              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
+          </div>
+
+          <!-- Noise & Hum Filter -->
+          <div class="flex items-center justify-between pt-1 border-t border-slate-700/50">
+            <div>
+              <div class="text-xs font-medium text-slate-200">Noise & Rumble Filter</div>
+              <div class="text-[11px] text-slate-400">100Hz filter cuts HVAC hum & mic vibrations</div>
+            </div>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="chk-audio-filter" class="sr-only peer" checked>
+              <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Card: Speaker Voice Profiles (Sample Library) -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-1.5">
+            <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Speaker Profiles</span>
+            <span id="badge-sample-count" class="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-mono">0 Active</span>
+          </div>
+          <button id="btn-add-sample" class="text-[11px] bg-sky-500 hover:bg-sky-400 text-white font-semibold px-2.5 py-1 rounded-lg transition flex items-center space-x-1 shadow-sm">
+            <span>+ Enroll Speaker</span>
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 leading-tight">
+          Enroll voice samples to replace generic labels like "Speaker 1" with participants' actual names.
+        </p>
+
+        <!-- List of Enrolled Voice Profiles -->
+        <div id="samples-list-container" class="space-y-1.5 max-h-48 overflow-y-auto custom-scroll text-xs">
+          <div class="text-center text-slate-500 py-3 text-xs italic">
+            No voice profiles enrolled yet. Tap "+ Enroll Speaker" to add one.
+          </div>
+        </div>
+      </div>
+
       <!-- Card: Model & Options -->
       <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
         <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Settings & Prompts</span>
@@ -266,6 +324,61 @@
       <h3 id="modal-title" class="text-sm font-bold text-sky-400">Notice</h3>
       <p id="modal-msg" class="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap"></p>
       <button id="modal-close" class="w-full py-2 bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs rounded-xl">OK</button>
+    </div>
+  </div>
+
+  <!-- Modal: Enroll Voice Profile -->
+  <div id="modal-voice-enroll" class="hidden fixed inset-0 bg-black/75 flex items-center justify-center p-4 z-50">
+    <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 max-w-sm w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center space-x-1.5">
+          <span>🎙️</span>
+          <span>Enroll Speaker Voice</span>
+        </h3>
+        <button id="btn-close-enroll-modal" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div class="space-y-1.5">
+        <label class="block text-xs font-medium text-slate-300">Speaker Name</label>
+        <input type="text" id="input-speaker-name" placeholder="e.g. Meshkat, Karim, Manager" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
+      </div>
+
+      <div class="space-y-2">
+        <label class="block text-xs font-medium text-slate-300">Voice Sample (3-8 seconds)</label>
+        <div class="grid grid-cols-2 gap-2 bg-slate-900 p-1 rounded-xl border border-slate-700">
+          <button id="btn-enroll-mode-mic" class="py-1.5 text-xs font-semibold rounded-lg bg-sky-500 text-white transition">Record 5s</button>
+          <button id="btn-enroll-mode-file" class="py-1.5 text-xs font-semibold rounded-lg text-slate-400 hover:text-white transition">Choose Clip</button>
+        </div>
+
+        <!-- Mic Recording for Sample -->
+        <div id="section-enroll-mic" class="border border-slate-700 bg-slate-900/50 rounded-xl p-4 text-center space-y-2">
+          <div id="enroll-pulse" class="w-12 h-12 rounded-full bg-slate-700 mx-auto flex items-center justify-center text-xl transition">
+            🎙️
+          </div>
+          <div id="enroll-timer" class="text-base font-mono font-bold text-slate-300">00:05</div>
+          <button id="btn-start-enroll-rec" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold rounded-xl transition">
+            Start 5s Recording
+          </button>
+        </div>
+
+        <!-- File Upload for Sample -->
+        <div id="section-enroll-file" class="hidden border border-slate-700 bg-slate-900/50 rounded-xl p-4 text-center space-y-2">
+          <label for="input-sample-file" class="cursor-pointer block text-xs text-sky-400 font-medium">
+            <span class="text-2xl block mb-1">📁</span>
+            <span id="lbl-sample-file-name">Tap to select sample audio</span>
+            <input type="file" id="input-sample-file" accept="audio/*" class="hidden">
+          </label>
+        </div>
+
+        <!-- Audio Player Preview -->
+        <div id="section-sample-preview" class="hidden pt-1">
+          <audio id="audio-sample-preview" controls class="w-full h-8 rounded-lg"></audio>
+        </div>
+      </div>
+
+      <button id="btn-save-voice-profile" class="w-full py-2.5 bg-sky-500 hover:bg-sky-400 text-white font-bold text-xs rounded-xl shadow-lg transition">
+        Save Speaker Profile
+      </button>
     </div>
   </div>
 
@@ -550,11 +663,297 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       });
     }
 
-    // Client-side Audio Compressor for Files > 18MB
-    async function compressAudioFile(file, onProgress) {
+    // ==========================================
+    // SPEAKER VOICE PROFILES (INDEXEDDB STORAGE)
+    // ==========================================
+    const DB_NAME = "MeetingTranscriberDB";
+    const DB_VERSION = 1;
+    const STORE_NAME = "voice_samples";
+
+    function openVoiceDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(DB_NAME, DB_VERSION);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains(STORE_NAME)) {
+            db.createObjectStore(STORE_NAME, { keyPath: "id" });
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function getAllVoiceSamples() {
+      try {
+        const db = await openVoiceDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(STORE_NAME, "readonly");
+          const store = tx.objectStore(STORE_NAME);
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (e) {
+        console.error("IndexedDB error:", e);
+        return [];
+      }
+    }
+
+    async function saveVoiceSample(sample) {
+      const db = await openVoiceDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.put(sample);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function deleteVoiceSample(id) {
+      const db = await openVoiceDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORE_NAME, "readwrite");
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    let enrolledVoiceSamples = [];
+
+    async function loadAndRenderVoiceSamples() {
+      enrolledVoiceSamples = await getAllVoiceSamples();
+      renderVoiceSamplesUI();
+    }
+
+    function renderVoiceSamplesUI() {
+      const container = document.getElementById("samples-list-container");
+      const badge = document.getElementById("badge-sample-count");
+      const activeCount = enrolledVoiceSamples.filter(s => s.active !== false).length;
+      badge.innerText = `${activeCount} Active`;
+
+      if (enrolledVoiceSamples.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-slate-500 py-3 text-xs italic">
+            No voice profiles enrolled yet. Tap "+ Enroll Speaker" to add one.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = enrolledVoiceSamples.map((s) => {
+        const isActive = s.active !== false;
+        return `
+          <div class="flex items-center justify-between bg-slate-900/90 px-3 py-2 rounded-xl border ${isActive ? 'border-sky-500/40 bg-sky-950/20' : 'border-slate-700/60 opacity-60'} transition">
+            <div class="flex items-center space-x-2.5 flex-1 min-w-0">
+              <input type="checkbox" onchange="toggleSampleActive('${s.id}', this.checked)" ${isActive ? 'checked' : ''} class="w-4 h-4 rounded text-sky-500 focus:ring-0 bg-slate-800 border-slate-700 cursor-pointer">
+              <div class="truncate">
+                <span class="font-semibold text-slate-200">${s.name}</span>
+                <span class="text-[10px] text-slate-400 block">${s.durationSec ? s.durationSec.toFixed(1) + 's sample' : 'Voice clip'}</span>
+              </div>
+            </div>
+            <div class="flex items-center space-x-1.5 flex-shrink-0">
+              <button onclick="playSampleAudio('${s.id}')" class="text-slate-400 hover:text-sky-400 p-1 text-xs" title="Preview Voice">▶️</button>
+              <button onclick="removeVoiceSample('${s.id}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs" title="Delete Profile">🗑️</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    window.toggleSampleActive = async (id, active) => {
+      const s = enrolledVoiceSamples.find(x => x.id === id);
+      if (s) {
+        s.active = active;
+        await saveVoiceSample(s);
+        renderVoiceSamplesUI();
+      }
+    };
+
+    window.removeVoiceSample = async (id) => {
+      if (confirm("Delete this speaker voice profile?")) {
+        await deleteVoiceSample(id);
+        await loadAndRenderVoiceSamples();
+      }
+    };
+
+    let activePlayingAudio = null;
+    window.playSampleAudio = (id) => {
+      const s = enrolledVoiceSamples.find(x => x.id === id);
+      if (!s || !s.blob) return;
+      if (activePlayingAudio) {
+        activePlayingAudio.pause();
+        activePlayingAudio = null;
+      }
+      const url = URL.createObjectURL(s.blob);
+      const audio = new Audio(url);
+      activePlayingAudio = audio;
+      audio.onended = () => { URL.revokeObjectURL(url); activePlayingAudio = null; };
+      audio.play().catch(e => console.error("Playback error:", e));
+    };
+
+    // Voice Enrollment Modal Listeners
+    const modalVoiceEnroll = document.getElementById("modal-voice-enroll");
+    const btnAddSample = document.getElementById("btn-add-sample");
+    const btnCloseEnrollModal = document.getElementById("btn-close-enroll-modal");
+    const inputSpeakerName = document.getElementById("input-speaker-name");
+    const btnEnrollModeMic = document.getElementById("btn-enroll-mode-mic");
+    const btnEnrollModeFile = document.getElementById("btn-enroll-mode-file");
+    const sectionEnrollMic = document.getElementById("section-enroll-mic");
+    const sectionEnrollFile = document.getElementById("section-enroll-file");
+    const inputSampleFile = document.getElementById("input-sample-file");
+    const lblSampleFileName = document.getElementById("lbl-sample-file-name");
+    const sectionSamplePreview = document.getElementById("section-sample-preview");
+    const audioSamplePreview = document.getElementById("audio-sample-preview");
+    const btnStartEnrollRec = document.getElementById("btn-start-enroll-rec");
+    const enrollTimer = document.getElementById("enroll-timer");
+    const enrollPulse = document.getElementById("enroll-pulse");
+    const btnSaveVoiceProfile = document.getElementById("btn-save-voice-profile");
+
+    let currentEnrollingBlob = null;
+    let currentEnrollingDuration = 5.0;
+    let enrollRecStream = null;
+    let enrollMediaRecorder = null;
+    let enrollTimerInterval = null;
+
+    btnAddSample.onclick = () => {
+      inputSpeakerName.value = "";
+      currentEnrollingBlob = null;
+      sectionSamplePreview.classList.add("hidden");
+      audioSamplePreview.src = "";
+      lblSampleFileName.innerText = "Tap to select sample audio";
+      btnEnrollModeMic.click();
+      modalVoiceEnroll.classList.remove("hidden");
+    };
+
+    btnCloseEnrollModal.onclick = () => {
+      if (enrollMediaRecorder && enrollMediaRecorder.state !== "inactive") {
+        enrollMediaRecorder.stop();
+      }
+      clearInterval(enrollTimerInterval);
+      modalVoiceEnroll.classList.add("hidden");
+    };
+
+    btnEnrollModeMic.onclick = () => {
+      btnEnrollModeMic.classList.add("bg-sky-500", "text-white");
+      btnEnrollModeMic.classList.remove("text-slate-400");
+      btnEnrollModeFile.classList.remove("bg-sky-500", "text-white");
+      btnEnrollModeFile.classList.add("text-slate-400");
+      sectionEnrollMic.classList.remove("hidden");
+      sectionEnrollFile.classList.add("hidden");
+    };
+
+    btnEnrollModeFile.onclick = () => {
+      btnEnrollModeFile.classList.add("bg-sky-500", "text-white");
+      btnEnrollModeFile.classList.remove("text-slate-400");
+      btnEnrollModeMic.classList.remove("bg-sky-500", "text-white");
+      btnEnrollModeMic.classList.add("text-slate-400");
+      sectionEnrollMic.classList.add("hidden");
+      sectionEnrollFile.classList.remove("hidden");
+    };
+
+    // 5-second sample voice recording
+    btnStartEnrollRec.onclick = async () => {
+      try {
+        enrollRecStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        let options = { audioBitsPerSecond: 32000 };
+        if (MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          options.mimeType = "audio/webm;codecs=opus";
+        }
+        enrollMediaRecorder = new MediaRecorder(enrollRecStream, options);
+        let chunks = [];
+
+        enrollMediaRecorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        enrollMediaRecorder.onstop = () => {
+          enrollRecStream.getTracks().forEach(t => t.stop());
+          const mime = enrollMediaRecorder.mimeType || "audio/webm";
+          currentEnrollingBlob = new Blob(chunks, { type: mime });
+          currentEnrollingDuration = 5.0;
+          const url = URL.createObjectURL(currentEnrollingBlob);
+          audioSamplePreview.src = url;
+          sectionSamplePreview.classList.remove("hidden");
+          enrollPulse.classList.remove("bg-rose-600", "animate-pulse");
+          btnStartEnrollRec.disabled = false;
+          btnStartEnrollRec.innerText = "Re-record 5s Clip";
+        };
+
+        enrollMediaRecorder.start();
+        btnStartEnrollRec.disabled = true;
+        enrollPulse.classList.add("bg-rose-600", "animate-pulse");
+
+        let left = 5;
+        enrollTimer.innerText = "00:05";
+        enrollTimerInterval = setInterval(() => {
+          left--;
+          enrollTimer.innerText = `00:0${left}`;
+          if (left <= 0) {
+            clearInterval(enrollTimerInterval);
+            if (enrollMediaRecorder.state !== "inactive") {
+              enrollMediaRecorder.stop();
+            }
+          }
+        }, 1000);
+
+      } catch (err) {
+        showAlert("Microphone Error", err.message);
+      }
+    };
+
+    // File sample upload
+    inputSampleFile.onchange = async (e) => {
+      if (e.target.files && e.target.files[0]) {
+        const f = e.target.files[0];
+        lblSampleFileName.innerText = f.name;
+        currentEnrollingBlob = f;
+        const url = URL.createObjectURL(f);
+        audioSamplePreview.src = url;
+        sectionSamplePreview.classList.remove("hidden");
+      }
+    };
+
+    // Save Speaker Profile
+    btnSaveVoiceProfile.onclick = async () => {
+      const name = inputSpeakerName.value.trim();
+      if (!name) {
+        showAlert("Name Missing", "Please enter the speaker's name.");
+        return;
+      }
+      if (!currentEnrollingBlob) {
+        showAlert("Sample Missing", "Please record or choose a voice clip first.");
+        return;
+      }
+
+      const sampleEntry = {
+        id: "sample_" + Date.now() + "_" + Math.random().toString(36).substr(2, 5),
+        name: name,
+        blob: currentEnrollingBlob,
+        durationSec: currentEnrollingDuration || 5.0,
+        active: true,
+        created: Date.now()
+      };
+
+      await saveVoiceSample(sampleEntry);
+      await loadAndRenderVoiceSamples();
+      modalVoiceEnroll.classList.add("hidden");
+      showAlert("Speaker Enrolled! 🎉", `Voice profile for '${name}' saved. Gemini will now identify and label their speaker turns automatically in your meetings.`);
+    };
+
+    // Initialize voice samples from IndexedDB
+    loadAndRenderVoiceSamples();
+
+    // ==========================================
+    // AUDIO PREPROCESSING & ENCODING ENGINE
+    // ==========================================
+    async function preprocessAndCompressAudio(file, activeVoiceSamples, onProgress) {
       if (!window.lamejs) {
         throw new Error("Audio compressor (lamejs) is not ready. Please refresh the page.");
       }
+      const doNormalize = document.getElementById("chk-audio-normalize")?.checked ?? true;
+      const doFilter = document.getElementById("chk-audio-filter")?.checked ?? true;
+
       onProgress("Reading audio file into memory...", 10);
       const arrayBuffer = await file.arrayBuffer();
 
@@ -564,7 +963,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       try {
         decodedBuffer = await tempCtx.decodeAudioData(arrayBuffer);
       } catch (decodeErr) {
-        throw new Error("Browser could not decode this audio format: " + decodeErr.message);
+        throw new Error("Browser could not decode audio format: " + decodeErr.message);
       } finally {
         tempCtx.close().catch(() => {});
       }
@@ -572,65 +971,132 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       const durationSec = decodedBuffer.duration;
       const targetSampleRate = 16000;
 
-      // Speech needs very little bitrate:
-      // < 50 mins: 32 kbps (~14 MB/hr)
-      // 50-90 mins: 24 kbps (~10.8 MB/hr)
-      // > 90 mins: 16 kbps (~7.2 MB/hr)
-      let kbps = 32;
-      if (durationSec > 5400) {
-        kbps = 16;
-      } else if (durationSec > 3000) {
-        kbps = 24;
-      }
-
-      onProgress(`Resampling speech to 16kHz mono (${Math.round(durationSec / 60)} mins)...`, 35);
+      // 1. Resample and Preprocess (Filter + Normalization)
+      onProgress(`Preprocessing audio (${doFilter ? '100Hz filter' : ''} ${doNormalize ? 'normalization' : ''})...`, 30);
       const targetLength = Math.max(1, Math.ceil(durationSec * targetSampleRate));
       const offlineCtx = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, targetLength, targetSampleRate);
 
       const source = offlineCtx.createBufferSource();
       source.buffer = decodedBuffer;
-      source.connect(offlineCtx.destination);
+
+      let lastNode = source;
+      if (doFilter) {
+        const filter = offlineCtx.createBiquadFilter();
+        filter.type = "highpass";
+        filter.frequency.value = 100; // speech fundamentals are > 100Hz; strips HVAC and mic rumble
+        filter.Q.value = 0.7;
+        lastNode.connect(filter);
+        lastNode = filter;
+      }
+      lastNode.connect(offlineCtx.destination);
       source.start(0);
 
-      const renderedBuffer = await offlineCtx.startRendering();
-      const float32 = renderedBuffer.getChannelData(0);
+      const preprocessedMeeting = await offlineCtx.startRendering();
+      let float32Meeting = preprocessedMeeting.getChannelData(0);
 
-      onProgress("Converting samples to 16-bit PCM...", 45);
-      const pcm16 = new Int16Array(float32.length);
-      for (let i = 0; i < float32.length; i++) {
-        let s = Math.max(-1, Math.min(1, float32[i]));
+      if (doNormalize) {
+        let peak = 0;
+        for (let i = 0; i < float32Meeting.length; i++) {
+          const abs = Math.abs(float32Meeting[i]);
+          if (abs > peak) peak = abs;
+        }
+        if (peak > 0.01 && peak < 0.85) {
+          const gain = 0.92 / peak;
+          for (let i = 0; i < float32Meeting.length; i++) {
+            float32Meeting[i] = Math.max(-1, Math.min(1, float32Meeting[i] * gain));
+          }
+        }
+      }
+
+      // 2. Decode and Concatenate Active Voice Samples if any
+      let trackedRanges = [];
+      let finalFloat32 = float32Meeting;
+
+      if (activeVoiceSamples && activeVoiceSamples.length > 0) {
+        onProgress(`Prepending ${activeVoiceSamples.length} speaker voice profile(s)...`, 45);
+        let sampleBuffers = [];
+        let totalSampleLength = 0;
+
+        for (const s of activeVoiceSamples) {
+          try {
+            const sAb = await s.blob.arrayBuffer();
+            const sTempCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const sDec = await sTempCtx.decodeAudioData(sAb);
+            await sTempCtx.close().catch(() => {});
+
+            // Resample sample to 16kHz mono (max 8s)
+            const sDur = Math.min(8.0, sDec.duration);
+            const sLen = Math.ceil(sDur * targetSampleRate);
+            const sOff = new (window.OfflineAudioContext || window.webkitOfflineAudioContext)(1, sLen, targetSampleRate);
+            const sSrc = sOff.createBufferSource();
+            sSrc.buffer = sDec;
+            sSrc.connect(sOff.destination);
+            sSrc.start(0);
+            const sRendered = await sOff.startRendering();
+            sampleBuffers.push({ name: s.name, buffer: sRendered.getChannelData(0) });
+            totalSampleLength += sLen;
+          } catch (sampleErr) {
+            console.warn("Could not process voice sample for", s.name, sampleErr);
+          }
+        }
+
+        if (sampleBuffers.length > 0) {
+          const combinedLength = totalSampleLength + float32Meeting.length;
+          finalFloat32 = new Float32Array(combinedLength);
+
+          let currentOffset = 0;
+          for (const sb of sampleBuffers) {
+            const startSec = (currentOffset / targetSampleRate).toFixed(1);
+            finalFloat32.set(sb.buffer, currentOffset);
+            currentOffset += sb.buffer.length;
+            const endSec = (currentOffset / targetSampleRate).toFixed(1);
+            trackedRanges.push({ name: sb.name, startSec, endSec });
+          }
+          finalFloat32.set(float32Meeting, currentOffset);
+        }
+      }
+
+      // 3. Convert Float32 to Int16
+      onProgress("Converting samples to 16-bit PCM...", 55);
+      const pcm16 = new Int16Array(finalFloat32.length);
+      for (let i = 0; i < finalFloat32.length; i++) {
+        let s = Math.max(-1, Math.min(1, finalFloat32[i]));
         pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
       }
 
-      onProgress(`Compressing speech to ${kbps}kbps MP3...`, 55);
+      // 4. Encode to MP3 via lamejs
+      const totalDurSec = finalFloat32.length / targetSampleRate;
+      let kbps = 32;
+      if (totalDurSec > 5400) kbps = 16;
+      else if (totalDurSec > 3000) kbps = 24;
+
+      onProgress(`Compressing audio to ${kbps}kbps MP3...`, 60);
       const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
       const mp3Chunks = [];
-      const chunkSize = 1152 * 8; // Standard LAME chunk
+      const chunkSize = 1152 * 8;
 
       for (let i = 0; i < pcm16.length; i += chunkSize) {
         const chunk = pcm16.subarray(i, i + chunkSize);
         const mp3buf = mp3encoder.encodeBuffer(chunk);
-        if (mp3buf.length > 0) {
-          mp3Chunks.push(mp3buf);
-        }
+        if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
+
         if ((i / chunkSize) % 25 === 0) {
-          const pct = Math.min(75, 55 + Math.round((i / pcm16.length) * 20));
-          onProgress(`Compressing speech (${pct}%)...`, pct);
-          // Yield to browser UI thread to prevent mobile stutter
+          const pct = Math.min(78, 60 + Math.round((i / pcm16.length) * 18));
+          onProgress(`Compressing audio (${pct}%)...`, pct);
           await new Promise(r => setTimeout(r, 0));
         }
       }
 
       const flushBuf = mp3encoder.flush();
-      if (flushBuf.length > 0) {
-        mp3Chunks.push(flushBuf);
-      }
+      if (flushBuf.length > 0) mp3Chunks.push(flushBuf);
 
       const mp3Blob = new Blob(mp3Chunks, { type: "audio/mp3" });
-      const compressedMb = (mp3Blob.size / (1024 * 1024)).toFixed(2);
-      onProgress(`Compressed: ${compressedMb} MB`, 75);
+      const compressedFile = new File([mp3Blob], file.name.replace(/\.[^/.]+$/, "") + ".mp3", { type: "audio/mp3" });
 
-      return new File([mp3Blob], file.name.replace(/\.[^/.]+$/, "") + ".mp3", { type: "audio/mp3" });
+      return {
+        file: compressedFile,
+        trackedRanges: trackedRanges
+      };
     }
 
     // Executive Notes Generator with Auto-Retry & Direct Markdown
@@ -706,7 +1172,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       renderResults();
     }
 
-    // Google Gemini API Upload & Transcribe Flow (Multi-File Support)
+    // Google Gemini API Upload & Transcribe Flow (Voice Sample & Multi-File Support)
     async function executeTranscription() {
       const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
       if (!apiKey) {
@@ -729,6 +1195,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       try {
         let fullTranscripts = [];
         const totalFiles = selectedAudioFiles.length;
+        const activeVoiceSamples = enrolledVoiceSamples.filter(s => s.active !== false);
 
         for (let i = 0; i < totalFiles; i++) {
           const currentFile = selectedAudioFiles[i];
@@ -736,23 +1203,20 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           const basePct = Math.round((i / totalFiles) * 75);
           const stepWeight = 75 / totalFiles;
 
-          let fileToUpload = currentFile;
-          const origSizeMb = currentFile.size / (1024 * 1024);
+          setProgress(`File ${fileNum}/${totalFiles}: Preprocessing & optimizing audio...`, basePct + 5);
+          const processedResult = await preprocessAndCompressAudio(currentFile, activeVoiceSamples, (msg, pct) => {
+            setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.6));
+          });
 
-          // Auto-compress on device if > 18MB or uncompressed large audio
-          if (origSizeMb > 18 || (currentFile.name.endsWith(".wav") && origSizeMb > 8)) {
-            setProgress(`File ${fileNum}/${totalFiles}: Compressing (${origSizeMb.toFixed(1)} MB)...`, basePct + Math.round(stepWeight * 0.15));
-            fileToUpload = await compressAudioFile(currentFile, (msg, pct) => {
-              setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.5));
-            });
-          }
+          const fileToUpload = processedResult.file;
+          const trackedRanges = processedResult.trackedRanges;
 
           const finalSizeMb = fileToUpload.size / (1024 * 1024);
           if (finalSizeMb > 19.5) {
             throw new Error(`File ${fileNum} is ${finalSizeMb.toFixed(1)} MB after compression, exceeding the 19.5 MB limit.`);
           }
 
-          setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.6));
+          setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.7));
           const base64Data = await fileToBase64(fileToUpload);
           const audioPart = {
             inlineData: {
@@ -761,8 +1225,24 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             }
           };
 
+          // Build Transcription Prompt (incorporating voice sample matching if active)
+          let promptToUse = TRANSCRIPTION_PROMPT;
+          if (trackedRanges && trackedRanges.length > 0) {
+            const prefixDurationSec = trackedRanges[trackedRanges.length - 1].endSec;
+            const speakerDetails = trackedRanges.map(tr => `- Seconds ${tr.startSec}s to ${tr.endSec}s: Reference clip for "${tr.name}"`).join("\n");
+            const namesList = trackedRanges.map(tr => `"${tr.name}"`).join(", ");
+
+            promptToUse += `\n\nCRITICAL SPEAKER IDENTIFICATION & VOICE MATCHING INSTRUCTIONS:\n` +
+              `The first ${prefixDurationSec} seconds of this audio contain REFERENCE VOICE SAMPLES for enrolled participants:\n` +
+              `${speakerDetails}\n\n` +
+              `MANDATORY SPEAKER DIARIZATION RULES:\n` +
+              `1. ZERO REFERENCE TRANSCRIPTION: DO NOT transcribe speech from the first ${prefixDurationSec} seconds. The actual meeting starts at ${prefixDurationSec} seconds.\n` +
+              `2. VOICE RECOGNITION & NAMING: Compare the voices in the meeting with the reference voice samples above. When a voice matches, you MUST label their speaker turns using their actual name: ${namesList} (e.g. '[00:15] ${trackedRanges[0].name}: ...').\n` +
+              `3. For any other speaker whose voice does not match the enrolled samples, label them as "Speaker 2", "Speaker 3", etc.\n`;
+          }
+
           // Step 1: Transcribe via Gemini
-          setProgress(`File ${fileNum}/${totalFiles}: Transcribing with Gemini...`, basePct + Math.round(stepWeight * 0.8));
+          setProgress(`File ${fileNum}/${totalFiles}: Transcribing with Gemini...`, basePct + Math.round(stepWeight * 0.85));
           const genUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
           const genResp = await fetch(genUrl, {
             method: "POST",
@@ -772,7 +1252,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
                 {
                   parts: [
                     audioPart,
-                    { text: TRANSCRIPTION_PROMPT }
+                    { text: promptToUse }
                   ]
                 }
               ]
