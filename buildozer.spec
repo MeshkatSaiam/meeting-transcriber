@@ -31,10 +31,10 @@ requirements = python3,kivy==2.3.1,python-dotenv,urllib3,certifi,chardet,idna,re
 orientation = portrait
 
 # (list) Permissions
-android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_AUDIO
+android.permissions = INTERNET,READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE
 
-# (int) Target Android API, should be as high as possible.
-android.api = 34
+# (int) Target Android API (API 31 for native Android 12 stability)
+android.api = 31
 
 # (int) Minimum API your APK / AAB will support.
 android.minapi = 26

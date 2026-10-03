@@ -933,10 +933,6 @@ def request_android_permissions():
                 Permission.READ_EXTERNAL_STORAGE,
                 Permission.WRITE_EXTERNAL_STORAGE,
             ]
-            if hasattr(Permission, "READ_MEDIA_AUDIO"):
-                perms.append(Permission.READ_MEDIA_AUDIO)
-            else:
-                perms.append("android.permission.READ_MEDIA_AUDIO")
 
             def on_permissions_callback(permissions, grant_results):
                 print(f"[Android Permissions Callback]: {permissions} -> {grant_results}", flush=True)
