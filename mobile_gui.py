@@ -54,8 +54,18 @@ def get_app_user_data_dir() -> Path:
     """Returns dedicated user_data_dir for Android/Desktop cross-compatibility."""
     from kivy.utils import platform
     if platform == "android":
-        # 1. Environment variables set by python-for-android
-        for env_key in ("ANDROID_PRIVATE", "ANDROID_ARGUMENT", "EXTERNAL_STORAGE"):
+        # 1. Kivy App user_data_dir if app is running
+        try:
+            app = App.get_running_app()
+            if app and hasattr(app, "user_data_dir") and app.user_data_dir:
+                p = Path(app.user_data_dir)
+                p.mkdir(parents=True, exist_ok=True)
+                return p
+        except Exception:
+            pass
+
+        # 2. Environment variables set by python-for-android
+        for env_key in ("ANDROID_PRIVATE", "ANDROID_ARGUMENT"):
             val = os.environ.get(env_key)
             if val:
                 p = Path(val)
@@ -67,29 +77,26 @@ def get_app_user_data_dir() -> Path:
                 except Exception:
                     pass
 
-        # 2. Pyjnius Android context filesDir
+        # 3. Pyjnius Android Context getFilesDir using Kivy's cast pattern
         try:
-            from jnius import autoclass
+            from jnius import autoclass, cast
             PythonActivity = autoclass("org.kivy.android.PythonActivity")
-            context = PythonActivity.mActivity
-            files_dir = context.getFilesDir().getAbsolutePath()
-            p = Path(files_dir)
+            context = cast("android.content.Context", PythonActivity.mActivity)
+            file_p = cast("java.io.File", context.getFilesDir())
+            p = Path(file_p.getAbsolutePath())
             p.mkdir(parents=True, exist_ok=True)
             return p
         except Exception:
             pass
 
-        # 3. Known package data dirs
-        for candidate in [
-            Path("/data/data/org.meshkat.meetingtranscriber/files"),
-            Path("/data/user/0/org.meshkat.meetingtranscriber/files"),
-            Path("/sdcard/Download"),
-        ]:
-            try:
-                candidate.mkdir(parents=True, exist_ok=True)
-                return candidate
-            except Exception:
-                continue
+        # 4. Use app current working directory (always writable on Android: /data/data/.../files/app)
+        try:
+            cwd = Path.cwd()
+            p = cwd / "app_data"
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            pass
 
     # Desktop fallback (Windows/Mac/Linux)
     try:
@@ -101,27 +108,32 @@ def get_app_user_data_dir() -> Path:
     except Exception:
         pass
 
-    d = Path.home() / ".meeting_transcriber"
     try:
+        d = Path.home() / ".meeting_transcriber"
         d.mkdir(parents=True, exist_ok=True)
+        return d
     except Exception:
         pass
+
+    d = Path.cwd() / "meeting_transcriber_data"
+    d.mkdir(parents=True, exist_ok=True)
     return d
 
 def get_settings_file_path() -> Path:
     return get_app_user_data_dir() / "settings.json"
 
 def load_app_settings() -> dict:
-    s_file = get_settings_file_path()
-    if not s_file.exists():
-        return dict(DEFAULT_SETTINGS)
     try:
+        s_file = get_settings_file_path()
+        if not s_file.exists():
+            return dict(DEFAULT_SETTINGS)
         with open(s_file, "r", encoding="utf-8") as f:
             data = json.load(f)
             merged = dict(DEFAULT_SETTINGS)
             merged.update(data)
             return merged
-    except Exception:
+    except Exception as e:
+        print(f"[Warning loading settings]: {e}", file=sys.stderr)
         return dict(DEFAULT_SETTINGS)
 
 def save_app_settings(settings: dict):
@@ -911,6 +923,29 @@ class MobileTranscriberLayout(BoxLayout):
         modal.add_widget(content)
         modal.open()
 
+def request_android_permissions():
+    """Request runtime permissions required for reading audio files on Android."""
+    from kivy.utils import platform
+    if platform == "android":
+        try:
+            from android.permissions import request_permissions, Permission
+            perms = [
+                Permission.READ_EXTERNAL_STORAGE,
+                Permission.WRITE_EXTERNAL_STORAGE,
+            ]
+            if hasattr(Permission, "READ_MEDIA_AUDIO"):
+                perms.append(Permission.READ_MEDIA_AUDIO)
+            else:
+                perms.append("android.permission.READ_MEDIA_AUDIO")
+
+            def on_permissions_callback(permissions, grant_results):
+                print(f"[Android Permissions Callback]: {permissions} -> {grant_results}", flush=True)
+
+            request_permissions(perms, on_permissions_callback)
+            print("[Android Permissions]: Storage and media permissions requested.", flush=True)
+        except Exception as e:
+            print(f"[Android Permissions Warning]: {e}", file=sys.stderr, flush=True)
+
 # ==============================================================================
 # Mobile Application Root
 # ==============================================================================
@@ -918,7 +953,59 @@ class MobileTranscriberLayout(BoxLayout):
 class MobileTranscriberApp(App):
     def build(self):
         self.title = "Meeting Transcriber"
-        return MobileTranscriberLayout()
+        try:
+            return MobileTranscriberLayout()
+        except Exception:
+            err_msg = traceback.format_exc()
+            print(f"[FATAL APP BUILD ERROR]:\n{err_msg}", file=sys.stderr, flush=True)
+            return self.build_error_widget(err_msg)
+
+    def on_start(self):
+        # Schedule permission request AFTER the window has been fully initialized and shown
+        Clock.schedule_once(lambda dt: request_android_permissions(), 0.8)
+
+    def build_error_widget(self, error_message: str):
+        layout = BoxLayout(orientation="vertical", padding=16, spacing=10)
+
+        title = Label(
+            text="Meeting Transcriber — Error",
+            font_size="17sp",
+            bold=True,
+            color=get_color_from_hex("#EF4444"),
+            size_hint_y=None,
+            height=32
+        )
+        layout.add_widget(title)
+
+        desc = Label(
+            text="A startup error occurred. You can copy this error:",
+            font_size="12sp",
+            color=get_color_from_hex("#94A3B8"),
+            size_hint_y=None,
+            height=24
+        )
+        layout.add_widget(desc)
+
+        txt = TextInput(
+            text=error_message,
+            readonly=True,
+            font_size="11sp",
+            background_color=get_color_from_hex("#0F172A"),
+            foreground_color=get_color_from_hex("#F8FAFC")
+        )
+        layout.add_widget(txt)
+
+        btn_box = BoxLayout(orientation="horizontal", size_hint_y=None, height=46, spacing=10)
+        btn_copy = Button(text="Copy Error", bold=True, background_color=get_color_from_hex("#2563EB"))
+        btn_copy.bind(on_release=lambda *a: Clipboard.copy(error_message))
+        btn_box.add_widget(btn_copy)
+
+        btn_close = Button(text="Exit App", bold=True, background_color=get_color_from_hex("#475569"))
+        btn_close.bind(on_release=lambda *a: sys.exit(1))
+        btn_box.add_widget(btn_close)
+
+        layout.add_widget(btn_box)
+        return layout
 
 if __name__ == "__main__":
     MobileTranscriberApp().run()
