@@ -90,22 +90,6 @@
     </div>
   </header>
 
-  <!-- Top Navigation Tabs (Dual Navigation for foolproof mobile access) -->
-  <nav class="bg-slate-900/95 border-b border-slate-800 px-3 py-1.5 flex items-center justify-around flex-shrink-0 z-30">
-    <button type="button" id="top-nav-transcribe" class="flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-sky-500 text-white transition flex items-center justify-center space-x-1 shadow-sm active:scale-95 touch-manipulation cursor-pointer">
-      <span class="text-sm">🎙️</span>
-      <span>Transcribe</span>
-    </button>
-    <button type="button" id="top-nav-results" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer ml-1.5">
-      <span class="text-sm">📋</span>
-      <span>Results & Notes</span>
-    </button>
-    <button type="button" id="top-nav-settings" class="flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer ml-1.5">
-      <span class="text-sm">⚙️</span>
-      <span>Settings</span>
-    </button>
-  </nav>
-
   <!-- Main Scrollable Body -->
   <main class="flex-1 overflow-y-auto custom-scroll p-4 pb-20 max-w-lg mx-auto w-full">
 
@@ -621,29 +605,12 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             navBtn.classList.add("text-slate-400");
           }
         }
-
-        // Update Top Nav
-        const topNavBtn = document.getElementById(`top-nav-${t}`);
-        if (topNavBtn) {
-          if (t === tabId) {
-            topNavBtn.className = "flex-1 py-1.5 px-2 text-xs font-bold rounded-xl bg-sky-500 text-white transition flex items-center justify-center space-x-1 shadow-sm active:scale-95 touch-manipulation cursor-pointer" + (t !== "transcribe" ? " ml-1.5" : "");
-          } else {
-            topNavBtn.className = "flex-1 py-1.5 px-2 text-xs font-semibold rounded-xl text-slate-400 hover:text-white transition flex items-center justify-center space-x-1 active:scale-95 touch-manipulation cursor-pointer" + (t !== "transcribe" ? " ml-1.5" : "");
-          }
-        }
       });
     }
 
     document.getElementById("nav-transcribe").onclick = () => switchTab("transcribe");
     document.getElementById("nav-results").onclick = () => switchTab("results");
     document.getElementById("nav-settings").onclick = () => switchTab("settings");
-
-    const topNavTranscribe = document.getElementById("top-nav-transcribe");
-    const topNavResults = document.getElementById("top-nav-results");
-    const topNavSettings = document.getElementById("top-nav-settings");
-    if (topNavTranscribe) topNavTranscribe.onclick = () => switchTab("transcribe");
-    if (topNavResults) topNavResults.onclick = () => switchTab("results");
-    if (topNavSettings) topNavSettings.onclick = () => switchTab("settings");
 
     // File vs Live Mode Toggle
     const btnModeFile = document.getElementById("btn-mode-file");
