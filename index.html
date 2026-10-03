@@ -360,6 +360,9 @@ Output ONLY a valid JSON object matching this schema:
         selectedAudioFile = e.target.files[0];
         const szMb = (selectedAudioFile.size / (1024 * 1024)).toFixed(1);
         lblFileName.innerText = `${selectedAudioFile.name} (${szMb} MB)`;
+        if (selectedAudioFile.size > 18 * 1024 * 1024) {
+          showAlert("File Size Warning", `This file is ${szMb} MB. Direct browser upload supports up to 18 MB. Please compress this audio file or use the 'Record Live' tab for long meetings.`);
+        }
       }
     };
 
@@ -372,7 +375,11 @@ Output ONLY a valid JSON object matching this schema:
     btnRecStart.onclick = async () => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorder = new MediaRecorder(stream);
+        let options = { audioBitsPerSecond: 32000 };
+        if (typeof MediaRecorder.isTypeSupported === "function" && MediaRecorder.isTypeSupported("audio/webm;codecs=opus")) {
+          options.mimeType = "audio/webm;codecs=opus";
+        }
+        mediaRecorder = new MediaRecorder(stream, options);
         recordedChunks = [];
 
         mediaRecorder.ondataavailable = (e) => {
@@ -380,11 +387,14 @@ Output ONLY a valid JSON object matching this schema:
         };
 
         mediaRecorder.onstop = () => {
-          const blob = new Blob(recordedChunks, { type: "audio/webm" });
-          selectedAudioFile = new File([blob], `Recording_${new Date().toISOString().slice(0,10)}.webm`, { type: "audio/webm" });
-          lblFileName.innerText = `Recorded: ${selectedAudioFile.name}`;
+          const mimeType = mediaRecorder.mimeType || "audio/webm";
+          const ext = mimeType.includes("mp4") ? "m4a" : "webm";
+          const blob = new Blob(recordedChunks, { type: mimeType });
+          const szMb = (blob.size / (1024 * 1024)).toFixed(2);
+          selectedAudioFile = new File([blob], `Recording_${new Date().toISOString().slice(0,10)}_${Date.now()}.${ext}`, { type: mimeType });
+          lblFileName.innerText = `Recorded: ${selectedAudioFile.name} (${szMb} MB)`;
           btnModeFile.click(); // switch view back
-          showAlert("Recording Captured", "Voice recording ready for transcription!");
+          showAlert("Recording Captured", `Voice recording ready for transcription! (Size: ${szMb} MB)`);
         };
 
         mediaRecorder.start();
@@ -492,66 +502,18 @@ Output ONLY a valid JSON object matching this schema:
         let audioPart;
         let uploadedFileName = null;
 
-        // Path A: Inline Base64 for files < 18MB
-        if (fileSizeMb < 18) {
-          setProgress("Reading audio data...", 20);
-          const base64Data = await fileToBase64(selectedAudioFile);
-          audioPart = {
-            inlineData: {
-              mimeType: selectedAudioFile.type || "audio/mp3",
-              data: base64Data
-            }
-          };
-        } 
-        // Path B: Resumable File API for larger files
-        else {
-          setProgress("Initiating Google File Upload...", 15);
-          const initUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?uploadType=resumable&key=${apiKey}`;
-          const initResp = await fetch(initUrl, {
-            method: "POST",
-            headers: {
-              "X-Goog-Upload-Protocol": "resumable",
-              "X-Goog-Upload-Command": "start",
-              "X-Goog-Upload-Header-Content-Length": String(selectedAudioFile.size),
-              "X-Goog-Upload-Header-Content-Type": selectedAudioFile.type || "audio/mp3",
-              "Content-Type": "application/json"
-            },
-            body: JSON.stringify({ file: { display_name: selectedAudioFile.name } })
-          });
-
-          if (!initResp.ok) {
-            const err = await initResp.text();
-            throw new Error(`File upload initiation failed: ${err}`);
-          }
-
-          const uploadUrl = initResp.headers.get("x-goog-upload-url") || initResp.headers.get("upload-url");
-          if (!uploadUrl) throw new Error("Could not obtain upload URL from Google File API.");
-
-          setProgress("Uploading audio to Gemini File API...", 40);
-          const uploadResp = await fetch(uploadUrl, {
-            method: "POST",
-            headers: {
-              "Content-Length": String(selectedAudioFile.size),
-              "X-Goog-Upload-Offset": "0",
-              "X-Goog-Upload-Command": "upload, finalize"
-            },
-            body: selectedAudioFile
-          });
-
-          if (!uploadResp.ok) {
-            const err = await uploadResp.text();
-            throw new Error(`File binary upload failed: ${err}`);
-          }
-
-          const uploadData = await uploadResp.json();
-          uploadedFileName = uploadData.file.name;
-          audioPart = {
-            fileData: {
-              mimeType: uploadData.file.mimeType || "audio/mp3",
-              fileUri: uploadData.file.uri
-            }
-          };
+        if (fileSizeMb > 18) {
+          throw new Error(`File size (${fileSizeMb.toFixed(1)} MB) exceeds the 18 MB limit for direct browser transcription. Please compress your audio or use the 'Record Live' tab (which records up to 1 hour under 15 MB).`);
         }
+
+        setProgress("Reading audio data...", 20);
+        const base64Data = await fileToBase64(selectedAudioFile);
+        audioPart = {
+          inlineData: {
+            mimeType: selectedAudioFile.type || "audio/mp3",
+            data: base64Data
+          }
+        };
 
         // Step 2: Transcribe via Gemini
         setProgress("Transcribing with Gemini AI...", 65);
