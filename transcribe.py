@@ -9,8 +9,34 @@ import concurrent.futures
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
-import docx
-from google import genai
+from typing import Any
+from gemini_rest import GeminiRestClient
+
+try:
+    import docx
+    HAS_DOCX = True
+except (ImportError, Exception):
+    docx = None
+    HAS_DOCX = False
+
+try:
+    from google import genai
+    HAS_GENAI_SDK = True
+except (ImportError, Exception):
+    genai = None
+    HAS_GENAI_SDK = False
+
+def get_gemini_client(api_key: str) -> Any:
+    """
+    Returns an active Gemini client.
+    Prefers google.genai if installed and working, falls back to zero-dependency GeminiRestClient.
+    """
+    if HAS_GENAI_SDK and genai is not None:
+        try:
+            return genai.Client(api_key=api_key)
+        except Exception as e:
+            print(f"[GenAI SDK Notice]: {e}. Using pure-Python Gemini client.", flush=True)
+    return GeminiRestClient(api_key=api_key)
 
 # Ensure UTF-8 output for Bengali and Unicode characters in Windows terminal
 if getattr(sys, "stdout", None) is not None and hasattr(sys.stdout, "encoding") and sys.stdout.encoding != "utf-8":
@@ -119,7 +145,7 @@ def transcribe_voice_sample_clip(clip_path: Path | str, model: str = DEFAULT_MOD
         return ""
 
     try:
-        client = genai.Client(api_key=key)
+        client = get_gemini_client(api_key=key)
         uploaded = client.files.upload(file=str(src))
         while uploaded.state.name == "PROCESSING":
             time.sleep(0.5)
@@ -492,7 +518,7 @@ def clean_chunk_text(text: str) -> str:
             cleaned_lines.append(stripped)
     return "\n\n".join(cleaned_lines)
 
-def reconcile_speakers(client: genai.Client, chunks: list[dict], models: list[str], cancel_event=None, api_call_callback=None) -> dict[int, dict[str, dict]]:
+def reconcile_speakers(client: Any, chunks: list[dict], models: list[str], cancel_event=None, api_call_callback=None) -> dict[int, dict[str, dict]]:
     if cancel_event and cancel_event.is_set():
         raise TranscriptionCancelledException("Transcription cancelled by user.")
     valid_chunks = [c for c in chunks if not c.get("skipped") and c.get("transcript", "").strip()]
@@ -965,7 +991,7 @@ def process_prefix_cutoff_and_shift(
     return "\n".join(remaining_lines).strip(), dropped_lines
 
 def transcribe_chunk_with_fallback(
-    client: genai.Client,
+    client: Any,
     uploaded_file,
     chunk_index: int,
     models: list[str],
@@ -1071,7 +1097,7 @@ def process_chunk(chunk_info: tuple[int, float, float, Path], api_key: str, mode
     except Exception:
         pass
 
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client(api_key=api_key)
 
     total_prefix_duration = 0.0
     tracked_ranges = []
@@ -1301,7 +1327,7 @@ def generate_meeting_notes(transcript_text: str, model: str = DEFAULT_MODEL, mod
     if not api_key:
         raise ValueError("GEMINI_API_KEY not found in .env file.")
 
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client(api_key=api_key)
 
     if models_to_try is None:
         models_to_try = [model]
@@ -1376,6 +1402,8 @@ def extract_transcript_from_file(file_path: Path) -> str:
         raise FileNotFoundError(f"File '{file_path}' does not exist.")
 
     if file_path.suffix.lower() == ".docx":
+        if not HAS_DOCX or docx is None:
+            raise RuntimeError("python-docx is not installed on this system. Please open a .txt or .md file.")
         doc = docx.Document(str(file_path))
         lines = []
         for p in doc.paragraphs:
@@ -1430,7 +1458,24 @@ def save_transcript_docx(
     meeting_notes: str | None = None,
     metadata: dict | None = None
 ) -> Path:
+    output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    if not HAS_DOCX or docx is None:
+        # Fallback to readable text document on systems without python-docx (e.g. Android)
+        fallback_path = output_path.with_suffix(".txt")
+        lines = [f"# {title}\n"]
+        if metadata:
+            meta_items = [f"{k.capitalize()}: {v}" for k, v in metadata.items()]
+            lines.append(" | ".join(meta_items) + "\n")
+        if meeting_notes and meeting_notes.strip():
+            lines.append("\n## Meeting Notes & Action Items\n\n" + meeting_notes + "\n")
+        if merged_transcript and merged_transcript.strip():
+            lines.append("\n## Diarized Transcript\n\n" + merged_transcript + "\n")
+        with open(fallback_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+        return fallback_path
+
     doc = docx.Document()
     
     # Document Title
@@ -1546,7 +1591,7 @@ def run_transcription_pipeline(
     if not is_ffmpeg_available():
         log("[Notice] FFmpeg is not detected on this system. Using Gemini Direct File Transcription mode.")
         set_status("Uploading audio directly to Gemini...", 0, 1)
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client(api_key=api_key)
         uploaded = client.files.upload(file=str(input_file))
         while uploaded.state.name == "PROCESSING":
             if cancel_event and cancel_event.is_set():
@@ -1709,7 +1754,7 @@ def run_transcription_pipeline(
 
     # Speaker Reconciliation across chunks
     set_status("Reconciling speaker identities across chunks...", total_chunks, total_chunks)
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client(api_key=api_key)
     speaker_mappings = reconcile_speakers(client, completed_results, models=models_to_try, cancel_event=cancel_event, api_call_callback=api_call_callback)
 
     # Globalize timestamps, apply reconciled speaker labels, and merge

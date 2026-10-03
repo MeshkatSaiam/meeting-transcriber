@@ -25,8 +25,7 @@ source.exclude_patterns = license,*.pyc,*.pyo,*.spec
 version = 1.0.0
 
 # (list) Application requirements
-# comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy==2.3.1,google-genai,python-docx,python-dotenv,urllib3,certifi,chardet,idna,requests,typing-extensions,pydantic
+requirements = python3,kivy==2.3.1,python-dotenv,urllib3,certifi,chardet,idna,requests,typing-extensions
 
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
 orientation = portrait

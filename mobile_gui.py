@@ -52,6 +52,46 @@ DEFAULT_SETTINGS = {
 
 def get_app_user_data_dir() -> Path:
     """Returns dedicated user_data_dir for Android/Desktop cross-compatibility."""
+    from kivy.utils import platform
+    if platform == "android":
+        # 1. Environment variables set by python-for-android
+        for env_key in ("ANDROID_PRIVATE", "ANDROID_ARGUMENT", "EXTERNAL_STORAGE"):
+            val = os.environ.get(env_key)
+            if val:
+                p = Path(val)
+                if env_key == "ANDROID_ARGUMENT":
+                    p = p / "files"
+                try:
+                    p.mkdir(parents=True, exist_ok=True)
+                    return p
+                except Exception:
+                    pass
+
+        # 2. Pyjnius Android context filesDir
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            context = PythonActivity.mActivity
+            files_dir = context.getFilesDir().getAbsolutePath()
+            p = Path(files_dir)
+            p.mkdir(parents=True, exist_ok=True)
+            return p
+        except Exception:
+            pass
+
+        # 3. Known package data dirs
+        for candidate in [
+            Path("/data/data/org.meshkat.meetingtranscriber/files"),
+            Path("/data/user/0/org.meshkat.meetingtranscriber/files"),
+            Path("/sdcard/Download"),
+        ]:
+            try:
+                candidate.mkdir(parents=True, exist_ok=True)
+                return candidate
+            except Exception:
+                continue
+
+    # Desktop fallback (Windows/Mac/Linux)
     try:
         app = App.get_running_app()
         if app and hasattr(app, "user_data_dir") and app.user_data_dir:
@@ -60,8 +100,12 @@ def get_app_user_data_dir() -> Path:
             return d
     except Exception:
         pass
+
     d = Path.home() / ".meeting_transcriber"
-    d.mkdir(parents=True, exist_ok=True)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        pass
     return d
 
 def get_settings_file_path() -> Path:
@@ -661,9 +705,13 @@ class MobileTranscriberLayout(BoxLayout):
         content.add_widget(lbl)
 
         # Start browsing in common audio directories or current dir
+        from kivy.utils import platform
         start_path = str(Path.home())
-        if sys.platform == "android":
-            start_path = "/storage/emulated/0"
+        if platform == "android":
+            for candidate in ["/storage/emulated/0/Download", "/storage/emulated/0/Music", "/storage/emulated/0", "/sdcard/Download", "/sdcard"]:
+                if os.path.exists(candidate):
+                    start_path = candidate
+                    break
 
         fc = FileChooserIconView(
             path=start_path,
@@ -827,7 +875,7 @@ class MobileTranscriberLayout(BoxLayout):
         doc_path = out_dir / doc_filename
 
         try:
-            save_transcript_docx(
+            saved_path = save_transcript_docx(
                 output_path=doc_path,
                 title=base_name,
                 merged_transcript=self.current_transcript,
@@ -837,7 +885,7 @@ class MobileTranscriberLayout(BoxLayout):
                     "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }
             )
-            self._show_info_modal("Saved Successfully", f"Document saved:\n\n{doc_path.name}\n\nLocation:\n{out_dir}")
+            self._show_info_modal("Saved Successfully", f"Document saved:\n\n{saved_path.name}\n\nLocation:\n{out_dir}")
         except Exception as e:
             self._show_info_modal("Save Error", f"Could not save document:\n{e}")
 
