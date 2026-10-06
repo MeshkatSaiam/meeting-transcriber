@@ -2421,6 +2421,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           }
 
           // 2. Parallel Chunk Transcription with Dynamic Timestamp Synchronization
+          const numChunks = fileChunks.length;
           const fileChunkTranscripts = new Array(numChunks);
           let completedChunksCount = 0;
           const concurrencySetting = document.getElementById("select-chunk-concurrency")?.value || "all";
