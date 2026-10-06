@@ -50,15 +50,45 @@ if getattr(sys, "stderr", None) is not None and hasattr(sys.stderr, "encoding") 
     except Exception:
         pass
 
-DEFAULT_MODEL = "gemini-3.6-flash"
-FALLBACK_MODEL = "gemini-3.5-flash-lite"
+DEFAULT_MODEL = "gemini-flash-latest"
+FALLBACK_MODEL = "gemini-flash-lite-latest"
 AVAILABLE_MODELS = [
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-pro-latest",
     "gemini-3-pro",
 ]
 MAX_RETRIES_PER_MODEL = 3
+MIN_CHUNK_DURATION = 3.0  # Minimum seconds required for a valid audio chunk
+
+def fetch_available_gemini_models(api_key: str = None) -> list[str]:
+    """Queries Google Generative Language API dynamically for available Gemini models."""
+    if not api_key:
+        api_key = os.environ.get("GEMINI_API_KEY", "")
+    if not api_key:
+        return AVAILABLE_MODELS
+    try:
+        import requests
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            models = [
+                m["name"].replace("models/", "")
+                for m in data.get("models", [])
+                if "generateContent" in m.get("supportedGenerationMethods", [])
+                and "gemini" in m.get("name", "")
+            ]
+            if models:
+                canonical = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest"]
+                return canonical + [m for m in models if m not in canonical]
+    except Exception as e:
+        print(f"[Model Discovery]: {e}", file=sys.stderr)
+    return AVAILABLE_MODELS
 MIN_CHUNK_DURATION = 3.0  # Minimum seconds required for a valid audio chunk
 
 class TranscriptionCancelledException(Exception):

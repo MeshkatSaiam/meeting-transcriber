@@ -63,7 +63,8 @@ from transcribe import (
     get_sample_display_label,
     extract_waveform_peaks,
     DEFAULT_MODEL,
-    TranscriptionCancelledException
+    TranscriptionCancelledException,
+    fetch_available_gemini_models
 )
 
 # Ensure UTF-8 output for Bengali and Unicode characters in Windows terminal
@@ -79,12 +80,14 @@ if getattr(sys, "stderr", None) is not None and hasattr(sys.stderr, "encoding") 
         pass
 
 AVAILABLE_MODELS = [
-    "gemini-3.5-flash-lite",
+    "gemini-flash-latest",
+    "gemini-3.8-flash",
     "gemini-3.6-flash",
     "gemini-3.5-flash",
-    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash-lite",
+    "gemini-flash-lite-latest",
+    "gemini-pro-latest",
     "gemini-3-pro",
-    "gemini-3.1-pro"
 ]
 
 HISTORY_FILE = Path("history.json")
@@ -1153,6 +1156,28 @@ class TranscriberGUI(BoxLayout):
         # Check for unfinalized draft recovery on startup
         Clock.schedule_once(lambda dt: self.check_and_prompt_draft_recovery(), 0.6)
 
+        # Dynamic Gemini models auto-discovery in background
+        threading.Thread(target=self._fetch_models_background, daemon=True).start()
+
+    def _fetch_models_background(self):
+        try:
+            live_models = fetch_available_gemini_models()
+            if live_models:
+                Clock.schedule_once(lambda dt: self._update_model_spinner_values(live_models))
+        except Exception:
+            pass
+
+    def _update_model_spinner_values(self, models: list[str]):
+        if hasattr(self, "model_spinner") and self.model_spinner:
+            cur = self.model_spinner.text
+            self.model_spinner.values = [f"Model: {m}" for m in models]
+            if cur in self.model_spinner.values:
+                self.model_spinner.text = cur
+        if hasattr(self, "settings_model_spinner") and self.settings_model_spinner:
+            cur_s = self.settings_model_spinner.text
+            self.settings_model_spinner.values = models
+            if cur_s in models:
+                self.settings_model_spinner.text = cur_s
 
     def _check_ffmpeg(self):
         try:
@@ -1183,8 +1208,12 @@ class TranscriberGUI(BoxLayout):
             path_str = file_path.decode("utf-8") if isinstance(file_path, bytes) else str(file_path)
             p = Path(path_str)
             if p.exists() and p.is_file():
-                self.file_input.text = str(p.resolve())
-                self.load_audio_file(p)
+                if hasattr(self, "selected_audio_files") and self.selected_audio_files and len(self.selected_audio_files) >= 1:
+                    if p.resolve() not in self.selected_audio_files:
+                        self.selected_audio_files.append(p.resolve())
+                        self._set_selected_audio_files(self.selected_audio_files)
+                else:
+                    self._set_selected_audio_files([p.resolve()])
                 self.update_live_status(f"Loaded audio: {p.name}", 0, 1)
         except Exception as e:
             print(f"[Drag & Drop Error]: {e}", file=sys.stderr)
@@ -3527,16 +3556,16 @@ class TranscriberGUI(BoxLayout):
                 root = tk.Tk()
                 root.withdraw()
                 root.attributes("-topmost", True)
-                file_path = filedialog.askopenfilename(
-                    title="Select Audio/Video File",
+                file_paths = filedialog.askopenfilenames(
+                    title="Select Audio/Video File(s)",
                     filetypes=[
                         ("Audio/Video Files", "*.mp3 *.m4a *.wav *.mp4 *.mkv *.aac *.flac *.ogg *.wma"),
                         ("All Files", "*.*")
                     ]
                 )
                 root.destroy()
-                if file_path:
-                    Clock.schedule_once(lambda dt: self._set_selected_audio(file_path))
+                if file_paths:
+                    Clock.schedule_once(lambda dt: self._set_selected_audio_files(list(file_paths)))
             except Exception as e:
                 print(f"[Error opening audio dialog]: {e}", file=sys.stderr)
 
@@ -3970,7 +3999,34 @@ class TranscriberGUI(BoxLayout):
         self.live_action_lbl.text = f"Audio Enhancement Error: {err_msg}"
         self.live_action_lbl.color = get_color_from_hex("#EF4444")
 
+    def _set_selected_audio_files(self, file_paths: list):
+        if not file_paths:
+            return
+        valid_paths = [Path(p).resolve() for p in file_paths if Path(p).exists()]
+        if not valid_paths:
+            return
+
+        self.selected_audio_files = valid_paths
+        if len(valid_paths) == 1:
+            self._set_selected_audio(str(valid_paths[0]))
+        else:
+            self.file_input.text = "; ".join(str(p) for p in valid_paths)
+            self.source_audio_name = f"{len(valid_paths)} files ({valid_paths[0].name}, ...)"
+            self.source_audio_path = str(valid_paths[0])
+            self.current_title = f"Batch_{len(valid_paths)}_files"
+            self.current_topic_slug = ""
+            self.company_name = ""
+            self.meeting_type = ""
+            self.person_names = []
+            self.recording_date = get_file_recording_date(valid_paths[0])
+            self.live_action_lbl.text = f"Selected {len(valid_paths)} audio files for batch transcription."
+            self.live_action_lbl.color = get_color_from_hex("#38BDF8")
+            self.enhance_audio_btn.disabled = True
+            self.enhance_audio_btn.opacity = 0.5
+            self.main_wf_title_lbl.text = f"Batch Mode: {len(valid_paths)} Files Queued"
+
     def _set_selected_audio(self, file_path: str):
+        self.selected_audio_files = [Path(file_path).resolve()]
         self.file_input.text = file_path
         self.source_audio_name = Path(file_path).name
         self.source_audio_path = file_path
@@ -4167,9 +4223,20 @@ class TranscriberGUI(BoxLayout):
             self.live_action_lbl.color = get_color_from_hex("#EF4444")
             return
 
-        audio_file = Path(file_path_str)
-        if not audio_file.exists():
-            self.live_action_lbl.text = f"File not found: {audio_file.name}"
+        # Determine target files (single or multiple)
+        audio_files = []
+        if hasattr(self, "selected_audio_files") and self.selected_audio_files:
+            audio_files = [p for p in self.selected_audio_files if p.exists()]
+
+        if not audio_files:
+            raw_splits = [s.strip('"\'; ') for s in file_path_str.replace(";", "\n").replace("|", "\n").splitlines() if s.strip()]
+            for s in raw_splits:
+                p_cand = Path(s)
+                if p_cand.exists():
+                    audio_files.append(p_cand.resolve())
+
+        if not audio_files:
+            self.live_action_lbl.text = "No valid audio or video file found."
             self.live_action_lbl.color = get_color_from_hex("#EF4444")
             return
 
@@ -4181,7 +4248,7 @@ class TranscriberGUI(BoxLayout):
             except ValueError:
                 chunk_arg = 30.0
 
-        model_name = self.model_spinner.text.strip() or DEFAULT_MODEL
+        model_name = self.model_spinner.text.replace("Model: ", "").strip() or DEFAULT_MODEL
         auto_rename_enabled = bool(self.auto_rename_chk.active)
         
         # Connect active voice samples from Sample Library
@@ -4216,22 +4283,33 @@ class TranscriberGUI(BoxLayout):
         self.company_name = ""
         self.meeting_type = ""
         self.person_names = []
-        self.source_audio_name = audio_file.name
-        self.source_audio_path = str(audio_file.resolve())
-        self.current_title = audio_file.stem
-        self.recording_date = get_file_recording_date(audio_file)
+
+        if len(audio_files) == 1:
+            first_f = audio_files[0]
+            self.source_audio_name = first_f.name
+            self.source_audio_path = str(first_f.resolve())
+            self.current_title = first_f.stem
+            self.recording_date = get_file_recording_date(first_f)
+            display_title = first_f.name
+        else:
+            self.source_audio_name = f"{len(audio_files)} files"
+            self.source_audio_path = str(audio_files[0].resolve())
+            self.current_title = f"Batch_{len(audio_files)}_files"
+            self.recording_date = get_file_recording_date(audio_files[0])
+            display_title = f"{len(audio_files)} Files (Batch Mode)"
+
         self.progress_bar.value = 0.0
         self.progress_bar.max = 1.0
 
         mode_desc = " [Auto-Rename Active]" if auto_rename_enabled else ""
         ref_desc = f" [{len(selected_samples)} Voice Sample(s)]" if selected_samples else ""
-        self.live_action_lbl.text = f"Processing '{audio_file.name}' with {model_name}...{mode_desc}{ref_desc}"
+        self.live_action_lbl.text = f"Processing '{display_title}' with {model_name}...{mode_desc}{ref_desc}"
         self.live_action_lbl.color = get_color_from_hex("#38BDF8")
-        self.display_placeholder_message(f"=== Processing Audio: {audio_file.name} ===\nSplitting audio chunks & sending to Gemini {model_name}...\nVoice samples active: {len(selected_samples)}\nClick 'Stop / Cancel' at any time to abort cleanly.\nLive progress is shown above.")
+        self.display_placeholder_message(f"=== Processing Audio: {display_title} ===\nSplitting audio chunks & sending to Gemini {model_name}...\nVoice samples active: {len(selected_samples)}\nClick 'Stop / Cancel' at any time to abort cleanly.\nLive progress is shown above.")
 
         threading.Thread(
             target=self._transcription_worker,
-            args=(audio_file, model_name, chunk_arg, auto_rename_enabled, selected_samples),
+            args=(audio_files, model_name, chunk_arg, auto_rename_enabled, selected_samples),
             daemon=True
         ).start()
 
@@ -4258,149 +4336,266 @@ class TranscriberGUI(BoxLayout):
         self.display_placeholder_message("=== Transcription Cancelled ===\nProcess was cleanly interrupted by user.\nReady to start a new session.")
         print("[Transcription] Cancelled cleanly without errors.", flush=True)
 
-    def _transcription_worker(self, audio_file: Path, model_name: str, chunk_arg, auto_rename: bool, reference_samples: list[dict]):
+    def _transcription_worker(self, audio_files: list[Path] | Path, model_name: str, chunk_arg, auto_rename: bool, reference_samples: list[dict]):
         try:
-            res = run_transcription_pipeline(
-                audio_path=audio_file,
-                model=model_name,
-                chunk_minutes=chunk_arg,
-                auto_save=False,
-                reference_samples=reference_samples,
-                log_callback=self.log_status,
-                status_callback=self.update_live_status,
-                cancel_event=self.cancel_event,
-                api_call_callback=lambda: Clock.schedule_once(lambda dt: self.on_api_call_increment())
-            )
+            if isinstance(audio_files, (Path, str)):
+                audio_files = [Path(audio_files)]
 
-            if self.cancel_event.is_set():
-                Clock.schedule_once(lambda dt: self._on_transcription_cancelled())
-                return
+            total_files = len(audio_files)
 
-            # Silent auto-save draft the moment raw transcript is produced!
-            draft_data = {
-                "source_audio_path": str(audio_file.resolve()),
-                "source_audio_name": audio_file.name,
-                "title": res.get("title", audio_file.stem),
-                "transcript": res.get("transcript", ""),
-                "meeting_notes": "",
-                "metadata": res.get("metadata", {}),
-                "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "completed": False
-            }
-            save_draft_session(draft_data)
+            if total_files == 1:
+                # Standard single file processing
+                audio_file = audio_files[0]
+                res = run_transcription_pipeline(
+                    audio_path=audio_file,
+                    model=model_name,
+                    chunk_minutes=chunk_arg,
+                    auto_save=False,
+                    reference_samples=reference_samples,
+                    log_callback=self.log_status,
+                    status_callback=self.update_live_status,
+                    cancel_event=self.cancel_event,
+                    api_call_callback=lambda: Clock.schedule_once(lambda dt: self.on_api_call_increment())
+                )
 
-            # Automatic cleanup on success only
-            intermediate_files = res.get("intermediate_files", [])
-            delete_intermediate_files(intermediate_files)
-
-            # Auto Rename & Auto-Save flow if checked
-            auto_save_info = None
-            if auto_rename and res.get("transcript"):
                 if self.cancel_event.is_set():
                     Clock.schedule_once(lambda dt: self._on_transcription_cancelled())
                     return
-                self.update_live_status("Auto-generating meeting notes & AI file names...", 1, 1)
-                try:
-                    notes_res = generate_meeting_notes(
-                        res["transcript"],
+
+                draft_data = {
+                    "source_audio_path": str(audio_file.resolve()),
+                    "source_audio_name": audio_file.name,
+                    "title": res.get("title", audio_file.stem),
+                    "transcript": res.get("transcript", ""),
+                    "meeting_notes": "",
+                    "metadata": res.get("metadata", {}),
+                    "saved_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "completed": False
+                }
+                save_draft_session(draft_data)
+
+                intermediate_files = res.get("intermediate_files", [])
+                delete_intermediate_files(intermediate_files)
+
+                auto_save_info = None
+                if auto_rename and res.get("transcript"):
+                    if self.cancel_event.is_set():
+                        Clock.schedule_once(lambda dt: self._on_transcription_cancelled())
+                        return
+                    self.update_live_status("Auto-generating meeting notes & AI file names...", 1, 1)
+                    try:
+                        notes_res = generate_meeting_notes(
+                            res["transcript"],
+                            model=model_name,
+                            cancel_event=self.cancel_event,
+                            api_call_callback=lambda: Clock.schedule_once(lambda dt: self.on_api_call_increment())
+                        )
+                        notes_text = notes_res.get("notes", "")
+                        topic_slug = notes_res.get("topic_slug", "")
+                        company_name = notes_res.get("company_name", "")
+                        meeting_type = notes_res.get("meeting_type", "")
+                        person_names = notes_res.get("person_names", [])
+
+                        draft_data["meeting_notes"] = notes_text
+                        save_draft_session(draft_data)
+
+                        rec_date = get_file_recording_date(audio_file)
+                        base_name = build_meeting_base_name(
+                            date_str=rec_date,
+                            company_name=company_name,
+                            meeting_type=meeting_type,
+                            person_names=person_names,
+                            topic_slug=topic_slug,
+                            fallback_title=audio_file.stem
+                        )
+
+                        out_setting = self.settings.get("default_output_folder", "").strip()
+                        output_dir = Path(out_setting).resolve() if (out_setting and Path(out_setting).exists()) else Path("output").resolve()
+                        output_dir.mkdir(parents=True, exist_ok=True)
+                        
+                        transcript_path = output_dir / f"{base_name}_Transcript.docx"
+                        save_transcript_docx(
+                            output_path=transcript_path,
+                            title=base_name,
+                            merged_transcript=res["transcript"],
+                            meeting_notes=None,
+                            metadata=res["metadata"]
+                        )
+
+                        notes_path = output_dir / f"{base_name}_Notes.docx"
+                        save_transcript_docx(
+                            output_path=notes_path,
+                            title=base_name,
+                            merged_transcript=None,
+                            meeting_notes=notes_text,
+                            metadata=res["metadata"]
+                        )
+
+                        hist_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        hist_t = {
+                            "id": datetime.now().strftime("%Y%m%d_%H%M%S_1"),
+                            "display_name": transcript_path.name,
+                            "file_path": str(transcript_path.resolve()),
+                            "date": hist_date,
+                            "source_audio": audio_file.name,
+                            "company_name": company_name or "N/A",
+                            "meeting_type": meeting_type or "N/A",
+                            "person_names": person_names or [],
+                            "topic_slug": topic_slug or "N/A",
+                            "duration": res["metadata"].get("duration", "N/A"),
+                            "has_notes": False
+                        }
+                        hist_n = {
+                            "id": datetime.now().strftime("%Y%m%d_%H%M%S_2"),
+                            "display_name": notes_path.name,
+                            "file_path": str(notes_path.resolve()),
+                            "date": hist_date,
+                            "source_audio": audio_file.name,
+                            "company_name": company_name or "N/A",
+                            "meeting_type": meeting_type or "N/A",
+                            "person_names": person_names or [],
+                            "topic_slug": topic_slug or "N/A",
+                            "duration": res["metadata"].get("duration", "N/A"),
+                            "has_notes": True
+                        }
+                        save_history_entry(hist_n)
+                        save_history_entry(hist_t)
+
+                        if self.drive_chk.active:
+                            upload_to_google_drive(transcript_path)
+                            upload_to_google_drive(notes_path)
+
+                        auto_save_info = {
+                            "notes": notes_text,
+                            "topic_slug": topic_slug,
+                            "company_name": company_name,
+                            "meeting_type": meeting_type,
+                            "person_names": person_names,
+                            "transcript_path": transcript_path,
+                            "notes_path": notes_path
+                        }
+                    except Exception as auto_err:
+                        print(f"\n[Auto-Rename Warning]: Failed auto-naming: {auto_err}\n{traceback.format_exc()}", file=sys.stderr)
+                        log_error_to_file(f"Auto-naming error: {auto_err}", traceback.format_exc())
+
+                Clock.schedule_once(lambda dt: self._on_transcription_success(res, auto_save_info))
+
+            else:
+                # Batch processing multiple files sequentially
+                all_transcripts = []
+                all_notes = []
+                last_res = None
+                last_auto_info = None
+
+                for b_idx, a_file in enumerate(audio_files):
+                    if self.cancel_event.is_set():
+                        Clock.schedule_once(lambda dt: self._on_transcription_cancelled())
+                        return
+
+                    b_num = b_idx + 1
+                    prefix = f"[Batch {b_num}/{total_files}: {a_file.name}]"
+                    self.update_live_status(f"{prefix} Starting transcription...", 0, 1)
+
+                    def _b_log(msg, p=prefix):
+                        self.log_status(f"{p} {msg}")
+
+                    def _b_status(msg, cur, tot, idx=b_idx, tot_f=total_files, p=prefix):
+                        frac = (idx / tot_f) + ((cur / max(1, tot)) / tot_f)
+                        self.progress_bar.value = min(0.99, frac)
+                        self.live_action_lbl.text = f"{p} {msg}"
+
+                    res = run_transcription_pipeline(
+                        audio_path=a_file,
                         model=model_name,
+                        chunk_minutes=chunk_arg,
+                        auto_save=False,
+                        reference_samples=reference_samples,
+                        log_callback=_b_log,
+                        status_callback=_b_status,
                         cancel_event=self.cancel_event,
                         api_call_callback=lambda: Clock.schedule_once(lambda dt: self.on_api_call_increment())
                     )
-                    notes_text = notes_res.get("notes", "")
-                    topic_slug = notes_res.get("topic_slug", "")
-                    company_name = notes_res.get("company_name", "")
-                    meeting_type = notes_res.get("meeting_type", "")
-                    person_names = notes_res.get("person_names", [])
+                    last_res = res
+                    t_text = res.get("transcript", "")
+                    if t_text:
+                        all_transcripts.append(f"--- [File {b_num}/{total_files}: {a_file.name}] ---\n\n{t_text}")
 
-                    # Update draft with notes
-                    draft_data["meeting_notes"] = notes_text
-                    save_draft_session(draft_data)
+                    # Cleanup intermediate files for this item
+                    intermediate_files = res.get("intermediate_files", [])
+                    delete_intermediate_files(intermediate_files)
 
-                    rec_date = get_file_recording_date(audio_file)
-                    base_name = build_meeting_base_name(
-                        date_str=rec_date,
-                        company_name=company_name,
-                        meeting_type=meeting_type,
-                        person_names=person_names,
-                        topic_slug=topic_slug,
-                        fallback_title=audio_file.stem
-                    )
-
+                    # Save docx for this item
                     out_setting = self.settings.get("default_output_folder", "").strip()
-                    if out_setting and Path(out_setting).exists():
-                        output_dir = Path(out_setting).resolve()
-                    else:
-                        output_dir = Path("output").resolve()
+                    output_dir = Path(out_setting).resolve() if (out_setting and Path(out_setting).exists()) else Path("output").resolve()
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    
-                    transcript_path = output_dir / f"{base_name}_Transcript.docx"
+
+                    item_docx = output_dir / f"{a_file.stem}_Transcript.docx"
                     save_transcript_docx(
-                        output_path=transcript_path,
-                        title=base_name,
-                        merged_transcript=res["transcript"],
-                        meeting_notes=None,
-                        metadata=res["metadata"]
+                        output_path=item_docx,
+                        title=a_file.stem,
+                        merged_transcript=t_text,
+                        metadata=res.get("metadata", {})
                     )
 
-                    notes_path = output_dir / f"{base_name}_Notes.docx"
-                    save_transcript_docx(
-                        output_path=notes_path,
-                        title=base_name,
-                        merged_transcript=None,
-                        meeting_notes=notes_text,
-                        metadata=res["metadata"]
-                    )
-
-                    # Save both to history
                     hist_date = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                    hist_t = {
-                        "id": datetime.now().strftime("%Y%m%d_%H%M%S_1"),
-                        "display_name": transcript_path.name,
-                        "file_path": str(transcript_path.resolve()),
+                    save_history_entry({
+                        "id": datetime.now().strftime(f"%Y%m%d_%H%M%S_b{b_idx}"),
+                        "display_name": item_docx.name,
+                        "file_path": str(item_docx.resolve()),
                         "date": hist_date,
-                        "source_audio": audio_file.name,
-                        "company_name": company_name or "N/A",
-                        "meeting_type": meeting_type or "N/A",
-                        "person_names": person_names or [],
-                        "topic_slug": topic_slug or "N/A",
-                        "duration": res["metadata"].get("duration", "N/A"),
+                        "source_audio": a_file.name,
+                        "company_name": "Batch",
+                        "meeting_type": "Transcript",
+                        "person_names": [],
+                        "topic_slug": a_file.stem,
+                        "duration": res.get("metadata", {}).get("duration", "N/A"),
                         "has_notes": False
-                    }
-                    hist_n = {
-                        "id": datetime.now().strftime("%Y%m%d_%H%M%S_2"),
-                        "display_name": notes_path.name,
-                        "file_path": str(notes_path.resolve()),
-                        "date": hist_date,
-                        "source_audio": audio_file.name,
-                        "company_name": company_name or "N/A",
-                        "meeting_type": meeting_type or "N/A",
-                        "person_names": person_names or [],
-                        "topic_slug": topic_slug or "N/A",
-                        "duration": res["metadata"].get("duration", "N/A"),
-                        "has_notes": True
-                    }
-                    save_history_entry(hist_n)
-                    save_history_entry(hist_t)
+                    })
 
-                    if self.drive_chk.active:
-                        upload_to_google_drive(transcript_path)
-                        upload_to_google_drive(notes_path)
+                    # If auto-rename/notes requested, generate notes per item
+                    if auto_rename and t_text:
+                        try:
+                            self.update_live_status(f"{prefix} Generating notes...", 1, 1)
+                            n_res = generate_meeting_notes(
+                                t_text,
+                                model=model_name,
+                                cancel_event=self.cancel_event,
+                                api_call_callback=lambda: Clock.schedule_once(lambda dt: self.on_api_call_increment())
+                            )
+                            n_text = n_res.get("notes", "")
+                            if n_text:
+                                all_notes.append(f"# File {b_num}/{total_files}: {a_file.name}\n\n{n_text}")
+                                item_notes_docx = output_dir / f"{a_file.stem}_Notes.docx"
+                                save_transcript_docx(
+                                    output_path=item_notes_docx,
+                                    title=a_file.stem,
+                                    merged_transcript=None,
+                                    meeting_notes=n_text,
+                                    metadata=res.get("metadata", {})
+                                )
+                        except Exception as n_err:
+                            print(f"[Batch Notes Error on {a_file.name}]: {n_err}", file=sys.stderr)
 
-                    auto_save_info = {
-                        "notes": notes_text,
-                        "topic_slug": topic_slug,
-                        "company_name": company_name,
-                        "meeting_type": meeting_type,
-                        "person_names": person_names,
-                        "transcript_path": transcript_path,
-                        "notes_path": notes_path
+                merged_res = {
+                    "transcript": "\n\n\n".join(all_transcripts),
+                    "total_duration": sum([get_audio_duration(f) for f in audio_files]),
+                    "title": f"Batch ({total_files} files)",
+                    "metadata": {
+                        "duration": f"{total_files} files",
+                        "model": model_name,
+                        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                     }
-                except Exception as auto_err:
-                    print(f"\n[Auto-Rename Warning]: Failed auto-naming: {auto_err}\n{traceback.format_exc()}", file=sys.stderr)
-                    log_error_to_file(f"Auto-naming error: {auto_err}", traceback.format_exc())
+                }
+                batch_notes_combined = "\n\n\n".join(all_notes) if all_notes else ""
+                batch_auto_info = {
+                    "notes": batch_notes_combined,
+                    "topic_slug": f"batch_{total_files}_files",
+                    "company_name": "Batch Mode",
+                    "meeting_type": "Batch Meeting",
+                    "person_names": []
+                }
+                Clock.schedule_once(lambda dt: self._on_transcription_success(merged_res, batch_auto_info))
 
-            Clock.schedule_once(lambda dt: self._on_transcription_success(res, auto_save_info))
         except TranscriptionCancelledException:
             Clock.schedule_once(lambda dt: self._on_transcription_cancelled())
         except Exception as exc:
@@ -4477,7 +4672,7 @@ class TranscriberGUI(BoxLayout):
             self.live_action_lbl.color = get_color_from_hex("#EF4444")
             return
 
-        model_name = self.model_spinner.text.strip() or "gemini-3.5-flash-lite"
+        model_name = self.model_spinner.text.replace("Model: ", "").strip() or DEFAULT_MODEL
         self.notes_btn.text = "Generating..."
         self.notes_btn.background_color = get_color_from_hex("#D97706")
         self.live_action_lbl.text = f"Analyzing transcript & generating notes with {model_name}..."

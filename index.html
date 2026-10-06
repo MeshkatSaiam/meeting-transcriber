@@ -161,16 +161,36 @@
         </div>
       </div>
 
-      <!-- Card: Executive Meeting Notes Option -->
-      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg flex items-center justify-between">
-        <div>
-          <div class="text-xs font-semibold text-slate-200">Executive Meeting Notes</div>
-          <div class="text-[11px] text-slate-400">Generate structured minutes, action items & topics</div>
+      <!-- Card: Transcription Options -->
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <!-- Option: Executive Meeting Notes -->
+        <div class="flex items-center justify-between">
+          <div class="pr-2">
+            <div class="text-xs font-semibold text-slate-200">Executive Meeting Notes</div>
+            <div class="text-[11px] text-slate-400">Generate structured minutes, action items & topics</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+            <input type="checkbox" id="chk-notes" class="sr-only peer" checked>
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+          </label>
         </div>
-        <label class="relative inline-flex items-center cursor-pointer">
-          <input type="checkbox" id="chk-notes" class="sr-only peer" checked>
-          <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
-        </label>
+
+        <div class="border-t border-slate-700/60"></div>
+
+        <!-- Option: Guess Speaker Names from Context -->
+        <div class="flex items-center justify-between">
+          <div class="pr-2">
+            <div class="text-xs font-semibold text-slate-200 flex items-center space-x-1.5">
+              <span>🗣️ Contextual Speaker Guessing</span>
+              <span class="text-[9px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-1.5 py-0.2 rounded font-mono">Smart</span>
+            </div>
+            <div class="text-[11px] text-slate-400">Deduces real names from greetings & dialog cues instead of generic "Speaker 1"</div>
+          </div>
+          <label class="relative inline-flex items-center cursor-pointer flex-shrink-0">
+            <input type="checkbox" id="chk-guess-speakers" class="sr-only peer" checked>
+            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-sky-500"></div>
+          </label>
+        </div>
       </div>
 
       <!-- Progress Area (Active during transcription) -->
@@ -181,6 +201,11 @@
         </div>
         <div class="w-full bg-slate-950 rounded-full h-2 overflow-hidden border border-slate-700">
           <div id="bar-progress" class="bg-sky-500 h-2 rounded-full transition-all duration-300 w-0"></div>
+        </div>
+        <div id="progress-retry-container" class="hidden pt-1 flex justify-end">
+          <button id="btn-retry-transcribe" type="button" class="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 active:scale-95 text-slate-950 font-bold text-xs rounded-xl shadow transition flex items-center space-x-1">
+            <span>🔄 Retry (Using Cached Audio)</span>
+          </button>
         </div>
       </div>
 
@@ -243,7 +268,37 @@
       </div>
     </section>
 
-    <!-- TAB 3: SETTINGS -->
+    <!-- TAB 3: HISTORY -->
+    <section id="tab-history" class="hidden space-y-4">
+      <div class="bg-slate-800/90 border border-slate-700/80 rounded-2xl p-4 shadow-lg space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <span class="text-xs font-bold uppercase tracking-wider text-sky-400">Meeting History</span>
+            <span id="badge-history-count" class="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-mono">0 Saved</span>
+          </div>
+          <button id="btn-clear-history" type="button" class="text-[10px] text-rose-400 hover:text-rose-300 font-semibold px-2 py-1 rounded bg-slate-900 border border-rose-900/40 hover:border-rose-500 transition">
+            Clear All
+          </button>
+        </div>
+
+        <p class="text-[11px] text-slate-400 leading-tight">
+          All your completed transcripts and executive meeting minutes are automatically saved here in your browser.
+        </p>
+
+        <!-- Search Bar -->
+        <div class="relative">
+          <input type="text" id="input-history-search" placeholder="Search by title, speaker, or content..." class="w-full bg-slate-900 border border-slate-700 rounded-xl pl-8 pr-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
+          <span class="absolute left-2.5 top-2.5 text-xs text-slate-400">🔍</span>
+        </div>
+
+        <!-- History Items Container -->
+        <div id="history-items-container" class="space-y-2.5 max-h-[500px] overflow-y-auto custom-scroll pr-1">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: SETTINGS -->
     <section id="tab-settings" class="hidden space-y-4">
       <!-- Card: Cloud Account & Sync (Supabase) -->
       <div class="bg-slate-800/90 border border-slate-700 rounded-2xl p-4 shadow-lg space-y-3">
@@ -363,12 +418,25 @@
         </div>
 
         <div>
-          <label class="block text-xs text-slate-300 mb-1 font-medium">Select Model</label>
+          <div class="flex items-center justify-between mb-1">
+            <label class="block text-xs text-slate-300 font-medium">Select Model</label>
+            <button id="btn-refresh-models" type="button" class="text-[10px] text-sky-400 hover:text-sky-300 font-semibold flex items-center space-x-1" title="Fetch active models from your Google API key">
+              <span>🔄 Check Latest Online</span>
+            </button>
+          </div>
           <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
-            <option value="gemini-3.6-flash" selected>Gemini Flash (Latest: gemini-3.6-flash)</option>
-            <option value="gemini-3.5-flash-lite">Gemini Flash-Lite (Highest Quota & Speed: gemini-3.5-flash-lite)</option>
-            <option value="gemini-3-pro">Gemini Pro (Deep Reasoning: gemini-3-pro)</option>
+            <option value="gemini-flash-latest" selected>✨ gemini-flash-latest (Auto-tracks newest Google Flash)</option>
+            <option value="gemini-3.8-flash">gemini-3.8-flash (Gemini 3.8 Flash - Newest)</option>
+            <option value="gemini-3.6-flash">gemini-3.6-flash (Gemini 3.6 Flash)</option>
+            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Flash-Lite - High Quota & Speed)</option>
+            <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Auto-tracks newest Flash-Lite)</option>
+            <option value="gemini-3-pro">gemini-3-pro (Gemini 3 Pro - Deep Reasoning)</option>
+            <option value="gemini-pro-latest">gemini-pro-latest (Auto-tracks newest Pro)</option>
+            <option value="custom">✏️ Enter Custom Model Name...</option>
           </select>
+          <div id="section-custom-model" class="hidden mt-2">
+            <input type="text" id="input-custom-model" placeholder="e.g. gemini-3.8-flash, gemini-3.8-pro" class="w-full bg-slate-900 border border-sky-500 rounded-xl px-3 py-2 text-xs text-white focus:outline-none">
+          </div>
           <p class="text-[10px] text-slate-400 mt-1 leading-tight">
             ⚡ <strong>Smart Quota Protection</strong>: If your primary model runs out of free quota or hits a rate limit, the app automatically switches to <strong>Gemini Flash-Lite</strong> so your meeting transcription finishes without interruption.
           </p>
@@ -436,14 +504,18 @@
   </main>
 
   <!-- Bottom Navigation Bar -->
-  <nav class="bg-slate-900 border-t border-slate-800 px-4 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex justify-around items-center flex-shrink-0 z-40 relative shadow-2xl">
+  <nav class="bg-slate-900 border-t border-slate-800 px-3 py-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] flex justify-around items-center flex-shrink-0 z-40 relative shadow-2xl">
     <button type="button" id="nav-transcribe" class="flex-1 py-1 flex flex-col items-center space-y-1 text-sky-400 active:scale-95 transition cursor-pointer touch-manipulation">
       <span class="text-xl">🎙️</span>
       <span class="text-[10px] font-bold">Transcribe</span>
     </button>
     <button type="button" id="nav-results" class="flex-1 py-1 flex flex-col items-center space-y-1 text-slate-400 hover:text-white active:scale-95 transition cursor-pointer touch-manipulation">
       <span class="text-xl">📋</span>
-      <span class="text-[10px] font-semibold">Results & Notes</span>
+      <span class="text-[10px] font-semibold">Results</span>
+    </button>
+    <button type="button" id="nav-history" class="flex-1 py-1 flex flex-col items-center space-y-1 text-slate-400 hover:text-white active:scale-95 transition cursor-pointer touch-manipulation">
+      <span class="text-xl">🕒</span>
+      <span class="text-[10px] font-semibold">History</span>
     </button>
     <button type="button" id="nav-settings" class="flex-1 py-1 flex flex-col items-center space-y-1 text-slate-400 hover:text-white active:scale-95 transition cursor-pointer touch-manipulation">
       <span class="text-xl">⚙️</span>
@@ -590,7 +662,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
     // Tab Navigation
     function switchTab(tabId) {
-      ["transcribe", "results", "settings"].forEach(t => {
+      ["transcribe", "results", "history", "settings"].forEach(t => {
         const sec = document.getElementById(`tab-${t}`);
         if (sec) sec.classList.toggle("hidden", t !== tabId);
 
@@ -606,11 +678,172 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           }
         }
       });
+      if (tabId === "history") {
+        renderHistoryTab();
+      }
     }
 
     document.getElementById("nav-transcribe").onclick = () => switchTab("transcribe");
     document.getElementById("nav-results").onclick = () => switchTab("results");
+    document.getElementById("nav-history").onclick = () => switchTab("history");
     document.getElementById("nav-settings").onclick = () => switchTab("settings");
+
+    // ==========================================
+    // MEETING HISTORY STORAGE & VIEW ENGINE
+    // ==========================================
+    const HISTORY_STORAGE_KEY = "meeting_transcriber_history_v1";
+
+    function getHistoryList() {
+      try {
+        const raw = localStorage.getItem(HISTORY_STORAGE_KEY);
+        return raw ? JSON.parse(raw) : [];
+      } catch (e) {
+        console.error("Failed to parse history:", e);
+        return [];
+      }
+    }
+
+    function saveSessionToHistory({ title, transcript, notes, model, audioNames }) {
+      if (!transcript && !notes) return;
+      try {
+        const history = getHistoryList();
+        const dateStr = new Date().toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+        const entry = {
+          id: "hist_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+          timestamp: Date.now(),
+          dateStr: dateStr,
+          title: title || (audioNames && audioNames.length > 0 ? audioNames[0].replace(/\.[^/.]+$/, "") : `Meeting ${dateStr}`),
+          model: model || "Gemini Flash",
+          audioNames: audioNames || [],
+          transcript: transcript || "",
+          notes: notes || "",
+          wordCount: transcript ? transcript.split(/\s+/).filter(Boolean).length : 0
+        };
+        // Place newest at the top
+        history.unshift(entry);
+        if (history.length > 60) history.pop();
+        localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+        renderHistoryTab();
+      } catch (err) {
+        console.warn("Could not save to history:", err);
+      }
+    }
+
+    function deleteHistoryItem(id) {
+      let history = getHistoryList();
+      history = history.filter(item => item.id !== id);
+      localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(history));
+      renderHistoryTab();
+    }
+
+    function clearAllHistory() {
+      if (confirm("Are you sure you want to delete all saved meeting transcripts and notes from this device?")) {
+        localStorage.removeItem(HISTORY_STORAGE_KEY);
+        renderHistoryTab();
+      }
+    }
+
+    function openHistoryInResults(id) {
+      const history = getHistoryList();
+      const item = history.find(h => h.id === id);
+      if (!item) return;
+      currentTranscript = item.transcript || "";
+      currentNotes = item.notes || "";
+      renderResults();
+      switchTab("results");
+    }
+
+    function renderHistoryTab(searchQuery = "") {
+      const container = document.getElementById("history-items-container");
+      const badgeCount = document.getElementById("badge-history-count");
+      if (!container) return;
+
+      const history = getHistoryList();
+      if (badgeCount) badgeCount.innerText = `${history.length} Saved`;
+
+      const q = (searchQuery || document.getElementById("input-history-search")?.value || "").toLowerCase().trim();
+      const filtered = q
+        ? history.filter(h => (h.title && h.title.toLowerCase().includes(q)) ||
+                              (h.transcript && h.transcript.toLowerCase().includes(q)) ||
+                              (h.notes && h.notes.toLowerCase().includes(q)))
+        : history;
+
+      if (filtered.length === 0) {
+        container.innerHTML = `
+          <div class="text-center text-slate-500 py-8 px-4 text-xs italic space-y-1">
+            <span class="text-2xl block mb-2">🕒</span>
+            <p class="font-medium text-slate-400">${q ? "No meetings match your search query." : "No meeting history saved yet."}</p>
+            <p class="text-[11px] text-slate-500">${q ? "Try searching for a different keyword." : "Transcribe an audio file and your results will automatically be stored here."}</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const fileLabel = item.audioNames && item.audioNames.length > 0 ? item.audioNames.join(", ") : "Audio Recording";
+        return `
+          <div class="bg-slate-900/90 border border-slate-700/80 rounded-xl p-3 space-y-2 hover:border-slate-600 transition shadow-sm">
+            <div class="flex items-start justify-between gap-2">
+              <div class="min-w-0 flex-1">
+                <h4 class="text-xs font-bold text-white truncate">${item.title}</h4>
+                <div class="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] text-slate-400">
+                  <span>📅 ${item.dateStr}</span>
+                  <span>•</span>
+                  <span class="text-sky-300 font-mono">${item.model}</span>
+                  <span>•</span>
+                  <span>${item.wordCount} words</span>
+                </div>
+              </div>
+              <div class="flex items-center space-x-1 flex-shrink-0">
+                ${item.notes ? '<span class="text-[9px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-1.5 py-0.5 rounded font-mono">Notes</span>' : ''}
+                <button onclick="deleteHistoryItem('${item.id}')" class="text-slate-500 hover:text-rose-400 p-1 text-xs transition" title="Delete from history">🗑️</button>
+              </div>
+            </div>
+
+            <div class="text-[11px] text-slate-400 font-mono truncate">
+              📁 ${fileLabel}
+            </div>
+
+            <div class="flex items-center gap-2 pt-1 border-t border-slate-800/80">
+              <button onclick="openHistoryInResults('${item.id}')" class="flex-1 py-1.5 bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-300 font-medium text-[11px] rounded-lg transition text-center flex items-center justify-center space-x-1">
+                <span>👁️ Open in Results</span>
+              </button>
+              <button onclick="copyHistoryTranscript('${item.id}')" class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] rounded-lg transition" title="Copy transcript">
+                📋 Copy
+              </button>
+              <button onclick="downloadHistoryTranscript('${item.id}')" class="py-1.5 px-2.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] rounded-lg transition" title="Download text file">
+                💾 TXT
+              </button>
+            </div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function copyHistoryTranscript(id) {
+      const history = getHistoryList();
+      const item = history.find(h => h.id === id);
+      if (!item || !item.transcript) return;
+      navigator.clipboard.writeText(item.transcript).then(() => {
+        showAlert("Copied", "Transcript copied to clipboard!");
+      });
+    }
+
+    function downloadHistoryTranscript(id) {
+      const history = getHistoryList();
+      const item = history.find(h => h.id === id);
+      if (!item || !item.transcript) return;
+      const blob = new Blob([item.transcript], { type: "text/plain;charset=utf-8" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${item.title.replace(/[^a-zA-Z0-9_-]/g, "_")}_transcript.txt`;
+      a.click();
+    }
+
+    document.getElementById("btn-clear-history")?.addEventListener("click", clearAllHistory);
+    document.getElementById("input-history-search")?.addEventListener("input", (e) => {
+      renderHistoryTab(e.target.value);
+    });
 
     // File vs Live Mode Toggle
     const btnModeFile = document.getElementById("btn-mode-file");
@@ -759,7 +992,12 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       }
       localStorage.setItem("gemini_api_key", key);
       showAlert("Saved", "Gemini API key saved securely on your device.");
+      fetchAvailableGeminiModels(true);
     };
+
+    if (savedKey) {
+      setTimeout(() => fetchAvailableGeminiModels(true), 1000);
+    }
 
     // Toggle API Key visibility
     document.getElementById("btn-toggle-key").onclick = () => {
@@ -1602,16 +1840,16 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       onProgress(`Compressing audio to ${kbps}kbps MP3...`, 60);
       const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
       const mp3Chunks = [];
-      const chunkSize = 1152 * 8;
+      const chunkSize = 1152 * 32; // 36,864 samples per block -> 4x fewer loop cycles & faster compression
 
       for (let i = 0; i < pcm16.length; i += chunkSize) {
         const chunk = pcm16.subarray(i, i + chunkSize);
         const mp3buf = mp3encoder.encodeBuffer(chunk);
         if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
 
-        if ((i / chunkSize) % 25 === 0) {
-          const pct = Math.min(78, 60 + Math.round((i / pcm16.length) * 18));
-          onProgress(`Compressing audio (${pct}%)...`, pct);
+        if ((i / chunkSize) % 10 === 0) {
+          const pct = Math.min(85, 60 + Math.round((i / pcm16.length) * 25));
+          onProgress(`Compressing speech audio (${pct}%)...`, pct);
           await new Promise(r => setTimeout(r, 0));
         }
       }
@@ -1627,6 +1865,100 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         trackedRanges: trackedRanges
       };
     }
+
+    // Audio Preprocessing Cache to prevent repeated compression on network errors or retries
+    const audioProcessCache = new Map();
+
+    function getAudioCacheKey(file, activeVoiceSamples, doNormalize, doFilter) {
+      const sampleIds = (activeVoiceSamples || []).map(s => s.id || s.name).join("_");
+      return `${file.name}_${file.size}_${file.lastModified || 0}_${sampleIds}_${doNormalize}_${doFilter}`;
+    }
+
+    // Dynamic Gemini Model Discovery & Custom Model Handling
+    async function fetchAvailableGeminiModels(silent = false) {
+      const apiKey = localStorage.getItem("gemini_api_key") || inputApiKey.value.trim();
+      if (!apiKey) {
+        if (!silent) showAlert("API Key Required", "Please enter and save your Gemini API key in Settings first.");
+        return;
+      }
+      const btnRefresh = document.getElementById("btn-refresh-models");
+      if (btnRefresh) btnRefresh.innerHTML = "<span>⏳ Checking...</span>";
+
+      try {
+        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (!data.models || !Array.isArray(data.models)) throw new Error("No models returned by Google API");
+
+        // Filter to generateContent models
+        const geminiModels = data.models
+          .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
+          .map(m => m.name.replace(/^models\//, ""))
+          .filter(name => name.includes("gemini"));
+
+        const selectModel = document.getElementById("select-model");
+        const prevValue = selectModel.value;
+
+        // Sort so newest models (3.8, 3.6, etc.) appear first
+        geminiModels.sort((a, b) => {
+          if (a.includes("3.8") && !b.includes("3.8")) return -1;
+          if (!a.includes("3.8") && b.includes("3.8")) return 1;
+          if (a.includes("3.6") && !b.includes("3.6")) return -1;
+          if (!a.includes("3.6") && b.includes("3.6")) return 1;
+          return a.localeCompare(b);
+        });
+
+        let html = `
+          <optgroup label="🌟 Google Canonical (Auto-Track Newest)">
+            <option value="gemini-flash-latest">✨ gemini-flash-latest (Auto-tracks newest Google Flash)</option>
+            <option value="gemini-flash-lite-latest">⚡ gemini-flash-lite-latest (Auto-tracks newest Flash-Lite)</option>
+            <option value="gemini-pro-latest">🧠 gemini-pro-latest (Auto-tracks newest Pro)</option>
+          </optgroup>
+          <optgroup label="🔥 Live Detected on Your Google Account">
+        `;
+
+        geminiModels.forEach(m => {
+          html += `<option value="${m}">${m}</option>`;
+        });
+
+        html += `
+          </optgroup>
+          <optgroup label="⚙️ Custom Model">
+            <option value="custom">✏️ Enter Custom Model Name...</option>
+          </optgroup>
+        `;
+
+        selectModel.innerHTML = html;
+        if (geminiModels.includes(prevValue) || prevValue === "gemini-flash-latest" || prevValue === "custom") {
+          selectModel.value = prevValue;
+        } else if (geminiModels.includes("gemini-3.8-flash")) {
+          selectModel.value = "gemini-3.8-flash";
+        } else {
+          selectModel.value = "gemini-flash-latest";
+        }
+
+        if (!silent) showAlert("Models Updated", `Detected ${geminiModels.length} active models enabled for your Google Gemini account!`);
+      } catch (err) {
+        console.warn("Could not fetch models live:", err);
+        if (!silent) showAlert("Online Check Failed", "Could not query models list: " + err.message + "\nStandard presets remain active.");
+      } finally {
+        if (btnRefresh) btnRefresh.innerHTML = "<span>🔄 Check Latest Online</span>";
+      }
+    }
+
+    const selectModelElem = document.getElementById("select-model");
+    const sectionCustomModelElem = document.getElementById("section-custom-model");
+    if (selectModelElem && sectionCustomModelElem) {
+      selectModelElem.addEventListener("change", () => {
+        if (selectModelElem.value === "custom") {
+          sectionCustomModelElem.classList.remove("hidden");
+        } else {
+          sectionCustomModelElem.classList.add("hidden");
+        }
+      });
+    }
+
+    document.getElementById("btn-refresh-models")?.addEventListener("click", () => fetchAvailableGeminiModels(false));
 
     // Executive Notes Generator with Auto-Retry & Direct Markdown
     async function generateMeetingNotesAction(apiKey, model, transcriptText) {
@@ -1661,12 +1993,12 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         throw new Error("Meeting notes network failure: " + netErr.message);
       }
 
-      // Handle 404 if 3.x model is not enabled for this key -> fallback to 2.5
+      // Handle 404 if model is not enabled for this key -> fallback
       if (!resp.ok && resp.status === 404) {
         let altModel = model;
-        if (model === "gemini-3.6-flash") altModel = "gemini-2.5-flash";
-        else if (model === "gemini-3-pro") altModel = "gemini-2.5-pro";
-        else if (model === "gemini-3.5-flash-lite") altModel = "gemini-2.5-flash-lite";
+        if (model.includes("flash") && !model.includes("lite")) altModel = "gemini-2.5-flash";
+        else if (model.includes("pro")) altModel = "gemini-2.5-pro";
+        else if (model.includes("lite")) altModel = "gemini-2.5-flash-lite";
 
         if (altModel !== model) {
           const altUrl = `https://generativelanguage.googleapis.com/v1beta/models/${altModel}:generateContent?key=${apiKey}`;
@@ -1680,9 +2012,9 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
       // Handle 429 rate limit / quota exhaustion with automatic fallback to Flash-Lite
       if (resp.status === 429) {
-        if (!model.includes("flash-lite")) {
+        if (!model.includes("lite")) {
           setProgress("Quota reached on primary model. Automatically falling back to Gemini Flash-Lite for notes...", 90);
-          let fbModel = "gemini-3.5-flash-lite";
+          let fbModel = "gemini-flash-lite-latest";
           let fbUrl = `https://generativelanguage.googleapis.com/v1beta/models/${fbModel}:generateContent?key=${apiKey}`;
           resp = await fetch(fbUrl, {
             method: "POST",
@@ -1690,7 +2022,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             body: JSON.stringify(payload)
           });
           if (!resp.ok && resp.status === 404) {
-            fbModel = "gemini-2.5-flash-lite";
+            fbModel = "gemini-3.5-flash-lite";
             fbUrl = `https://generativelanguage.googleapis.com/v1beta/models/${fbModel}:generateContent?key=${apiKey}`;
             resp = await fetch(fbUrl, {
               method: "POST",
@@ -1751,9 +2083,33 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         return;
       }
 
-      const model = document.getElementById("select-model").value;
-      const generateNotes = document.getElementById("chk-notes").checked;
+      // Resolve selected model (preset or custom input)
+      let model = document.getElementById("select-model").value;
+      if (model === "custom") {
+        const customVal = document.getElementById("input-custom-model")?.value.trim();
+        if (!customVal) {
+          showAlert("Custom Model Required", "Please type your model name (e.g. gemini-3.8-flash) in Settings.");
+          switchTab("settings");
+          return;
+        }
+        model = customVal;
+      }
+
+      const generateNotes = document.getElementById("chk-notes")?.checked ?? true;
+      const guessSpeakers = document.getElementById("chk-guess-speakers")?.checked ?? true;
+      const doNormalize = document.getElementById("chk-audio-normalize")?.checked ?? true;
+      const doFilter = document.getElementById("chk-audio-filter")?.checked ?? true;
       const btnStart = document.getElementById("btn-start");
+      const retryContainer = document.getElementById("progress-retry-container");
+
+      if (retryContainer) retryContainer.classList.add("hidden");
+      const barElem = document.getElementById("bar-progress");
+      if (barElem) barElem.classList.replace("bg-rose-500", "bg-sky-500");
+      const lblElem = document.getElementById("lbl-progress-status");
+      if (lblElem) {
+        lblElem.classList.remove("text-rose-400");
+        lblElem.classList.add("animate-pulse", "text-sky-300");
+      }
 
       btnStart.disabled = true;
       btnStart.classList.add("opacity-50");
@@ -1769,30 +2125,81 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           const basePct = Math.round((i / totalFiles) * 75);
           const stepWeight = 75 / totalFiles;
 
-          setProgress(`File ${fileNum}/${totalFiles}: Preprocessing & optimizing audio...`, basePct + 5);
-          const processedResult = await preprocessAndCompressAudio(currentFile, activeVoiceSamples, (msg, pct) => {
-            setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.6));
-          });
+          const cacheKey = getAudioCacheKey(currentFile, activeVoiceSamples, doNormalize, doFilter);
+          let fileToUpload;
+          let trackedRanges = [];
+          let base64Data;
+          let audioMimeType;
 
-          const fileToUpload = processedResult.file;
-          const trackedRanges = processedResult.trackedRanges;
+          // 1. Check in-memory Cache for instant reuse without re-compressing
+          if (audioProcessCache.has(cacheKey)) {
+            setProgress(`File ${fileNum}/${totalFiles}: Reusing cached compressed audio (Instant)...`, basePct + 20);
+            const cached = audioProcessCache.get(cacheKey);
+            fileToUpload = cached.file;
+            trackedRanges = cached.trackedRanges;
+            base64Data = cached.base64Data;
+            audioMimeType = cached.mimeType;
+          } else {
+            // Direct streaming check: if file is already a compressed audio format, <= 18.5MB, no voice profiles, and DSP is off
+            const isCompressedFormat = /^(audio\/(mp3|mpeg|m4a|aac|ogg|webm|opus))$/i.test(currentFile.type) ||
+                                       /\.(mp3|m4a|aac|ogg|webm|opus)$/i.test(currentFile.name);
+            const isUnderLimit = currentFile.size <= 18.5 * 1024 * 1024;
+            const noSamples = activeVoiceSamples.length === 0;
 
-          const finalSizeMb = fileToUpload.size / (1024 * 1024);
-          if (finalSizeMb > 19.5) {
-            throw new Error(`File ${fileNum} is ${finalSizeMb.toFixed(1)} MB after compression, exceeding the 19.5 MB limit.`);
+            if (!doFilter && !doNormalize && isCompressedFormat && isUnderLimit && noSamples) {
+              setProgress(`File ${fileNum}/${totalFiles}: Fast Mode: Reading audio directly...`, basePct + 15);
+              fileToUpload = currentFile;
+              trackedRanges = [];
+              audioMimeType = currentFile.type || "audio/mp3";
+              base64Data = await fileToBase64(fileToUpload);
+            } else {
+              setProgress(`File ${fileNum}/${totalFiles}: Preprocessing & optimizing audio...`, basePct + 5);
+              const processedResult = await preprocessAndCompressAudio(currentFile, activeVoiceSamples, (msg, pct) => {
+                setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.6));
+              });
+
+              fileToUpload = processedResult.file;
+              trackedRanges = processedResult.trackedRanges;
+              audioMimeType = fileToUpload.type || "audio/mp3";
+
+              const finalSizeMb = fileToUpload.size / (1024 * 1024);
+              if (finalSizeMb > 19.5) {
+                throw new Error(`File ${fileNum} is ${finalSizeMb.toFixed(1)} MB after compression, exceeding the 19.5 MB limit.`);
+              }
+
+              setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.7));
+              base64Data = await fileToBase64(fileToUpload);
+            }
+
+            // Save to memory cache for zero-delay retries
+            audioProcessCache.set(cacheKey, {
+              file: fileToUpload,
+              trackedRanges,
+              base64Data,
+              mimeType: audioMimeType
+            });
           }
 
-          setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.7));
-          const base64Data = await fileToBase64(fileToUpload);
           const audioPart = {
             inlineData: {
-              mimeType: fileToUpload.type || "audio/mp3",
+              mimeType: audioMimeType,
               data: base64Data
             }
           };
 
-          // Build Transcription Prompt (incorporating voice sample matching if active)
+          // Build Transcription Prompt
           let promptToUse = TRANSCRIPTION_PROMPT;
+
+          // Feature 5: Contextual Speaker Guessing Instruction
+          if (guessSpeakers) {
+            promptToUse += `\n\nCRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:\n` +
+              `1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').\n` +
+              `2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').\n` +
+              `3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.\n` +
+              `4. Maintain consistent speaker identification across the entire conversation.\n`;
+          }
+
+          // Voice Sample Profile Stitching (if enrolled)
           if (trackedRanges && trackedRanges.length > 0) {
             const prefixDurationSec = trackedRanges[trackedRanges.length - 1].endSec;
             const speakerDetails = trackedRanges.map(tr => `- Seconds ${tr.startSec}s to ${tr.endSec}s: Reference clip for "${tr.name}"`).join("\n");
@@ -1824,12 +2231,12 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
           let genResp = await requestGeminiTranscription(activeModel);
 
-          // If initial 3.x model is not enabled for this key (404), cascade to 2.5 series
+          // If initial model is not enabled for this key (404), cascade gracefully
           if (!genResp.ok && genResp.status === 404) {
             let alt = activeModel;
-            if (activeModel === "gemini-3.6-flash") alt = "gemini-2.5-flash";
-            else if (activeModel === "gemini-3-pro") alt = "gemini-2.5-pro";
-            else if (activeModel === "gemini-3.5-flash-lite") alt = "gemini-2.5-flash-lite";
+            if (activeModel.includes("flash") && !activeModel.includes("lite")) alt = "gemini-2.5-flash";
+            else if (activeModel.includes("pro")) alt = "gemini-2.5-pro";
+            else if (activeModel.includes("lite")) alt = "gemini-2.5-flash-lite";
             if (alt !== activeModel) {
               activeModel = alt;
               genResp = await requestGeminiTranscription(activeModel);
@@ -1837,10 +2244,14 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           }
 
           // If quota reached (429 or RESOURCE_EXHAUSTED) and not already on flash-lite, fallback!
-          if (genResp.status === 429 && !activeModel.includes("flash-lite")) {
+          if (genResp.status === 429 && !activeModel.includes("lite")) {
             setProgress(`⚠️ Quota limit on ${activeModel}. Automatically falling back to Gemini Flash-Lite...`, basePct + Math.round(stepWeight * 0.85));
-            activeModel = "gemini-3.5-flash-lite";
+            activeModel = "gemini-flash-lite-latest";
             genResp = await requestGeminiTranscription(activeModel);
+            if (!genResp.ok && genResp.status === 404) {
+              activeModel = "gemini-3.5-flash-lite";
+              genResp = await requestGeminiTranscription(activeModel);
+            }
             if (!genResp.ok && genResp.status === 404) {
               activeModel = "gemini-2.5-flash-lite";
               genResp = await requestGeminiTranscription(activeModel);
@@ -1887,13 +2298,32 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         setProgress("Complete!", 100);
         setTimeout(hideProgress, 800);
 
+        // Feature 4: Save session to persistent history
+        saveSessionToHistory({
+          title: selectedAudioFiles.length === 1 ? selectedAudioFiles[0].name.replace(/\.[^/.]+$/, "") : `Batch (${selectedAudioFiles.length} files)`,
+          model: activeModel,
+          audioNames: selectedAudioFiles.map(f => f.name),
+          transcript: currentTranscript,
+          notes: currentNotes
+        });
+
         // Switch to Results tab
         renderResults();
         switchTab("results");
 
       } catch (err) {
-        hideProgress();
-        showAlert("Error", err.message);
+        console.error("Transcription execution error:", err);
+        const retryContainer = document.getElementById("progress-retry-container");
+        if (retryContainer) retryContainer.classList.remove("hidden");
+        const barElem = document.getElementById("bar-progress");
+        if (barElem) barElem.classList.replace("bg-sky-500", "bg-rose-500");
+        const lblElem = document.getElementById("lbl-progress-status");
+        if (lblElem) {
+          lblElem.classList.remove("animate-pulse", "text-sky-300");
+          lblElem.classList.add("text-rose-400");
+          lblElem.innerText = `Failed: ${err.message}`;
+        }
+        showAlert("Transcription Notice", `${err.message}\n\n💡 Your compressed audio is safely cached in memory! You can tap 'Retry (Using Cached Audio)' to immediately resend without waiting for compression again.`);
       } finally {
         btnStart.disabled = false;
         btnStart.classList.remove("opacity-50");
@@ -1901,6 +2331,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     }
 
     document.getElementById("btn-start").onclick = executeTranscription;
+    document.getElementById("btn-retry-transcribe")?.addEventListener("click", executeTranscription);
 
     // Results Subtab Switching & Rendering
     const btnSubtabTranscript = document.getElementById("btn-subtab-transcript");
