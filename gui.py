@@ -1297,31 +1297,42 @@ class TranscriberGUI(BoxLayout):
         self.transcribe_view = BoxLayout(orientation="vertical", spacing=8)
 
         # A. Audio Input Surface Card
-        input_card = SurfaceCard(orientation="vertical", size_hint_y=None, height=130, padding=[12, 10, 12, 10], spacing=6)
+        input_card = SurfaceCard(orientation="vertical", size_hint_y=None, height=122, padding=[12, 8, 12, 8], spacing=5)
         
+        input_header_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=18)
         input_header = Label(
-            text="Audio Input",
+            text="Audio Input & Multi-File Queue",
             font_size="13sp",
             bold=True,
             color=get_color_from_hex("#F9FAFB"),
-            size_hint_y=None,
-            height=16,
             halign="left",
             valign="middle"
         )
         input_header.bind(size=input_header.setter("text_size"))
-        input_card.add_widget(input_header)
 
-        # Drop Zone Button
+        self.input_queue_badge = Label(
+            text="Ready | Drag & drop audio files or use Browse below",
+            font_size="11sp",
+            color=get_color_from_hex("#38BDF8"),
+            halign="right",
+            valign="middle"
+        )
+        self.input_queue_badge.bind(size=self.input_queue_badge.setter("text_size"))
+
+        input_header_row.add_widget(input_header)
+        input_header_row.add_widget(self.input_queue_badge)
+        input_card.add_widget(input_header_row)
+
+        # Drop Zone Button (Sleek unified banner)
         self.drop_zone_btn = Button(
-            text="  Drag & Drop Audio (MP3, WAV, etc.) or Browse",
+            text="  Drag & Drop Audio (MP3, WAV, M4A...) or Click to Browse",
             font_size="12sp",
             bold=True,
             background_normal="",
             background_color=get_color_from_hex("#16171B"),
             color=get_color_from_hex("#9CA3AF"),
             size_hint_y=None,
-            height=46
+            height=38
         )
         with self.drop_zone_btn.canvas.before:
             Color(*get_color_from_hex("#16171B"))
@@ -1400,11 +1411,11 @@ class TranscriberGUI(BoxLayout):
         input_card.add_widget(file_row)
         self.transcribe_view.add_widget(input_card)
 
-        # B. Middle Grid: 3 Elevated Surface Cards (Capture Settings, Processing Model, Voice Refs)
-        middle_grid = BoxLayout(orientation="horizontal", spacing=8, size_hint_y=None, height=165)
+        # B. Middle Grid: 3 Rebalanced Cards (Capture Settings: 30%, Processing Model: 44%, Voice Refs: 26%)
+        middle_grid = BoxLayout(orientation="horizontal", spacing=8, size_hint_y=None, height=182)
 
-        # Card 1: Capture Settings
-        card_capture = SurfaceCard(orientation="vertical", size_hint_x=0.50, padding=[10, 8, 10, 8], spacing=5)
+        # Card 1: Capture Settings (30% width)
+        card_capture = SurfaceCard(orientation="vertical", size_hint_x=0.30, padding=[10, 8, 10, 8], spacing=6)
         cap_title = Label(
             text="Capture Settings",
             font_size="12sp",
@@ -1439,14 +1450,14 @@ class TranscriberGUI(BoxLayout):
         gain_lbl = Label(text="Gain:", size_hint_x=None, width=34, color=get_color_from_hex("#9CA3AF"), font_size="11sp", halign="left", valign="middle")
         gain_lbl.bind(size=gain_lbl.setter("text_size"))
         
-        self.gain_slider = Slider(min=1.0, max=8.0, value=2.0, step=0.5, size_hint_x=0.42)
+        self.gain_slider = Slider(min=1.0, max=8.0, value=2.0, step=0.5, size_hint_x=0.52)
         self.gain_slider.bind(value=self._on_gain_slider_changed)
 
         self.gain_spinner = Spinner(
             text="2.0x (Default)",
             values=["1.0x (Raw)", "1.5x", "2.0x (Default)", "3.0x (Boost)", "5.0x High", "8.0x (Max)"],
             size_hint_x=None,
-            width=92,
+            width=90,
             font_size="10sp",
             background_color=get_color_from_hex("#121316"),
             color=get_color_from_hex("#F9FAFB")
@@ -1467,11 +1478,11 @@ class TranscriberGUI(BoxLayout):
         card_capture.add_widget(vu_row)
         middle_grid.add_widget(card_capture)
 
-        # Card 2: Processing Model
-        card_model = SurfaceCard(orientation="vertical", size_hint_x=0.25, padding=[10, 8, 10, 8], spacing=5)
-        model_hdr_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=16)
+        # Card 2: Processing Model (44% width - spacious and clean with zero text collisions)
+        card_model = SurfaceCard(orientation="vertical", size_hint_x=0.44, padding=[10, 8, 10, 8], spacing=6)
+        model_hdr_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=18)
         mod_title = Label(
-            text="Processing Model",
+            text="Processing Model & Options",
             font_size="12sp",
             bold=True,
             color=get_color_from_hex("#F9FAFB"),
@@ -1508,30 +1519,30 @@ class TranscriberGUI(BoxLayout):
         card_model.add_widget(self.model_spinner)
 
         # Chunking Options
-        chunk_row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=24)
+        chunk_row = BoxLayout(orientation="horizontal", spacing=6, size_hint_y=None, height=24)
         is_auto_mode = (self.settings.get("default_chunk_mode", "auto") == "auto")
         self.chk_auto = CheckBox(group="chunk_mode", active=is_auto_mode, size_hint_x=None, width=20)
         self.chk_auto.bind(active=self.on_chunk_mode_change)
-        auto_lbl = Label(text="Auto", color=get_color_from_hex("#E5E7EB"), font_size="11sp", size_hint_x=None, width=40, halign="left", valign="middle")
+        auto_lbl = Label(text="Auto Split", color=get_color_from_hex("#E5E7EB"), font_size="11sp", size_hint_x=None, width=65, halign="left", valign="middle")
         auto_lbl.bind(size=auto_lbl.setter("text_size"))
 
         self.chk_manual = CheckBox(group="chunk_mode", active=(not is_auto_mode), size_hint_x=None, width=20)
         self.chk_manual.bind(active=self.on_chunk_mode_change)
-        manual_lbl = Label(text="Manual:", color=get_color_from_hex("#E5E7EB"), font_size="11sp", size_hint_x=None, width=48, halign="left", valign="middle")
+        manual_lbl = Label(text="Manual (mins):", color=get_color_from_hex("#E5E7EB"), font_size="11sp", size_hint_x=None, width=85, halign="left", valign="middle")
         manual_lbl.bind(size=manual_lbl.setter("text_size"))
 
         self.chunk_input = TextInput(
             text=str(self.settings.get("default_chunk_minutes", "30")),
             multiline=False,
             size_hint_x=None,
-            width=42,
+            width=46,
             disabled=is_auto_mode,
             input_filter="float",
             font_size="11sp",
             background_color=get_color_from_hex("#27272A") if is_auto_mode else get_color_from_hex("#121316"),
             foreground_color=get_color_from_hex("#71717A") if is_auto_mode else get_color_from_hex("#F9FAFB"),
             cursor_color=get_color_from_hex("#3B82F6"),
-            padding=[4, 3, 4, 3]
+            padding=[6, 3, 6, 3]
         )
         chunk_row.add_widget(self.chk_auto)
         chunk_row.add_widget(auto_lbl)
@@ -1540,18 +1551,18 @@ class TranscriberGUI(BoxLayout):
         chunk_row.add_widget(self.chunk_input)
         card_model.add_widget(chunk_row)
 
-        # Checkboxes and Live Status
-        opts_row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=22)
-        self.guess_speakers_chk = CheckBox(active=True, size_hint_x=None, width=18)
-        guess_spk_lbl = Label(text="Smart Guessing", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=82, halign="left", valign="middle")
+        # Checkboxes and Options
+        opts_row = BoxLayout(orientation="horizontal", spacing=6, size_hint_y=None, height=24)
+        self.guess_speakers_chk = CheckBox(active=True, size_hint_x=None, width=20)
+        guess_spk_lbl = Label(text="Smart Guessing", color=get_color_from_hex("#D1D5DB"), font_size="11sp", size_hint_x=None, width=95, halign="left", valign="middle")
         guess_spk_lbl.bind(size=guess_spk_lbl.setter("text_size"))
 
-        self.auto_rename_chk = CheckBox(active=False, size_hint_x=None, width=18)
-        auto_ren_lbl = Label(text="Auto Rename", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=72, halign="left", valign="middle")
+        self.auto_rename_chk = CheckBox(active=False, size_hint_x=None, width=20)
+        auto_ren_lbl = Label(text="Auto Rename", color=get_color_from_hex("#D1D5DB"), font_size="11sp", size_hint_x=None, width=82, halign="left", valign="middle")
         auto_ren_lbl.bind(size=auto_ren_lbl.setter("text_size"))
 
-        self.drive_chk = CheckBox(active=False, size_hint_x=None, width=18)
-        drive_lbl = Label(text="Drive Sync", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=62, halign="left", valign="middle")
+        self.drive_chk = CheckBox(active=False, size_hint_x=None, width=20)
+        drive_lbl = Label(text="Drive Sync", color=get_color_from_hex("#D1D5DB"), font_size="11sp", size_hint_x=None, width=72, halign="left", valign="middle")
         drive_lbl.bind(size=drive_lbl.setter("text_size"))
 
         opts_row.add_widget(self.guess_speakers_chk)
@@ -1562,19 +1573,19 @@ class TranscriberGUI(BoxLayout):
         opts_row.add_widget(drive_lbl)
         card_model.add_widget(opts_row)
 
-        status_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=18)
-        stat_prefix = Label(text="Status: ", font_size="11sp", color=get_color_from_hex("#F9FAFB"), size_hint_x=None, width=45, halign="left", valign="middle")
+        status_row = BoxLayout(orientation="horizontal", size_hint_y=None, height=20, spacing=4)
+        stat_prefix = Label(text="Status:", font_size="11sp", bold=True, color=get_color_from_hex("#9CA3AF"), size_hint_x=None, width=46, halign="left", valign="middle")
         stat_prefix.bind(size=stat_prefix.setter("text_size"))
-        self.live_action_lbl = Label(text="Ready", font_size="11sp", bold=True, color=get_color_from_hex("#10B981"), halign="left", valign="middle")
-        self.live_action_lbl.bind(size=self.live_action_lbl.setter("text_size"))
+        self.live_action_lbl = Label(text="Ready", font_size="11sp", bold=True, color=get_color_from_hex("#10B981"), halign="left", valign="middle", shorten=True, shorten_from="right")
+        self.live_action_lbl.bind(size=lambda inst, val: setattr(inst, 'text_size', (val[0], val[1])))
         status_row.add_widget(stat_prefix)
         status_row.add_widget(self.live_action_lbl)
         card_model.add_widget(status_row)
         middle_grid.add_widget(card_model)
 
-        # Card 3: Voice Refs
-        card_voice = SurfaceCard(orientation="vertical", size_hint_x=0.25, padding=[10, 8, 10, 8], spacing=4)
-        voice_hdr = BoxLayout(orientation="horizontal", size_hint_y=None, height=16)
+        # Card 3: Voice Refs (26% width)
+        card_voice = SurfaceCard(orientation="vertical", size_hint_x=0.26, padding=[10, 8, 10, 8], spacing=4)
+        voice_hdr = BoxLayout(orientation="horizontal", size_hint_y=None, height=18)
         v_title = Label(
             text="Voice Refs",
             font_size="12sp",
@@ -1616,7 +1627,7 @@ class TranscriberGUI(BoxLayout):
             background_color=get_color_from_hex("#3B82F6"),
             color=get_color_from_hex("#FFFFFF"),
             size_hint_y=None,
-            height=40
+            height=42
         )
         with self.start_btn.canvas.before:
             self.start_bg_color = Color(*get_color_from_hex("#3B82F6"))
@@ -1632,8 +1643,8 @@ class TranscriberGUI(BoxLayout):
         self.progress_bar = ProgressBar(max=1.0, value=0.0, size_hint_y=None, height=4)
         self.transcribe_view.add_widget(self.progress_bar)
 
-        # D. Waveform Studio Card with Floating Micro-Toolbar
-        self.main_waveform_card = SurfaceCard(orientation="vertical", size_hint_y=None, height=140, padding=[10, 8, 10, 8], spacing=4)
+        # D. Waveform Studio Card with Floating Micro-Toolbar (Height increased to 150)
+        self.main_waveform_card = SurfaceCard(orientation="vertical", size_hint_y=None, height=150, padding=[10, 8, 10, 8], spacing=4)
         
         wf_header = BoxLayout(orientation="horizontal", size_hint_y=None, height=16, spacing=8)
         self.main_wf_title_lbl = Label(
@@ -1728,7 +1739,33 @@ class TranscriberGUI(BoxLayout):
         self.main_waveform_card.add_widget(wf_container)
         self.transcribe_view.add_widget(self.main_waveform_card)
 
-        # E. Live Diarized Transcript Display (GDI Texture Stream)
+        # E. Live Diarized Transcript Display (Framed in an elevated SurfaceCard)
+        self.transcript_card = SurfaceCard(orientation="vertical", size_hint=(1, 1), padding=[12, 10, 12, 10], spacing=6)
+
+        transcript_hdr = BoxLayout(orientation="horizontal", size_hint_y=None, height=20, spacing=8)
+        self.transcript_title_lbl = Label(
+            text="Live Diarized Transcript & Notes",
+            font_size="12sp",
+            bold=True,
+            color=get_color_from_hex("#F9FAFB"),
+            halign="left",
+            valign="middle"
+        )
+        self.transcript_title_lbl.bind(size=self.transcript_title_lbl.setter("text_size"))
+
+        self.transcript_meta_lbl = Label(
+            text="Verbatim Language Fidelity (বাংলা & English) | Automatic Speaker Turns",
+            font_size="11sp",
+            color=get_color_from_hex("#9CA3AF"),
+            halign="right",
+            valign="middle"
+        )
+        self.transcript_meta_lbl.bind(size=self.transcript_meta_lbl.setter("text_size"))
+
+        transcript_hdr.add_widget(self.transcript_title_lbl)
+        transcript_hdr.add_widget(self.transcript_meta_lbl)
+        self.transcript_card.add_widget(transcript_hdr)
+
         self.display_scroll = ScrollView(
             size_hint=(1, 1),
             do_scroll_x=False,
@@ -1745,21 +1782,28 @@ class TranscriberGUI(BoxLayout):
         self.transcript_display_layout.bind(minimum_height=self.transcript_display_layout.setter("height"))
         self.display_scroll.bind(width=lambda s, w: setattr(self.transcript_display_layout, "width", w))
         self.display_scroll.add_widget(self.transcript_display_layout)
-        self.transcribe_view.add_widget(self.display_scroll)
+        self.transcript_card.add_widget(self.display_scroll)
+        self.transcribe_view.add_widget(self.transcript_card)
 
-        self.display_placeholder_message("=== Welcome to Bilingual Meeting Transcriber ===\nSelect an audio or video file above, or load an existing transcript to view here.")
+        self.display_placeholder_message(
+            "✦ Welcome to Bilingual Meeting Transcriber ✦\n\n"
+            "• Step 1: Select audio/video file(s) or record live speech.\n"
+            "• Step 2: Choose your Gemini AI model and chunking mode.\n"
+            "• Step 3: Click 'Start Transcription' to begin.\n\n"
+            "Your verbatim diarized transcript will stream here in real-time."
+        )
 
-        # F. Action Dock (Fixed Bottom Anchor)
-        self.actions_bar = SurfaceCard(orientation="horizontal", size_hint_y=None, height=44, padding=[8, 6, 8, 6], spacing=8)
+        # F. Action Dock (Fixed Bottom Anchor with Elevated Accent Styling)
+        self.actions_bar = SurfaceCard(orientation="horizontal", size_hint_y=None, height=46, padding=[8, 6, 8, 6], spacing=8)
 
         self.preview_transcript_btn = Button(
             text="Preview Transcript",
             bold=True,
             background_normal="",
-            background_color=get_color_from_hex("#27272A"),
+            background_color=get_color_from_hex("#1E293B"),
             color=get_color_from_hex("#FFFFFF"),
             disabled=False,
-            opacity=0.7,
+            opacity=0.85,
             size_hint_x=0.20,
             font_size="11sp"
         )
@@ -1769,10 +1813,10 @@ class TranscriberGUI(BoxLayout):
             text="Preview Notes",
             bold=True,
             background_normal="",
-            background_color=get_color_from_hex("#27272A"),
+            background_color=get_color_from_hex("#1E293B"),
             color=get_color_from_hex("#FFFFFF"),
             disabled=False,
-            opacity=0.7,
+            opacity=0.85,
             size_hint_x=0.18,
             font_size="11sp"
         )
@@ -1782,10 +1826,10 @@ class TranscriberGUI(BoxLayout):
             text="Generate Notes",
             bold=True,
             background_normal="",
-            background_color=get_color_from_hex("#27272A"),
+            background_color=get_color_from_hex("#7C3AED"),
             color=get_color_from_hex("#FFFFFF"),
             disabled=False,
-            opacity=0.7,
+            opacity=1.0,
             size_hint_x=0.20,
             font_size="11sp"
         )
@@ -1795,10 +1839,10 @@ class TranscriberGUI(BoxLayout):
             text="Save Transcript (.docx)",
             bold=True,
             background_normal="",
-            background_color=get_color_from_hex("#27272A"),
+            background_color=get_color_from_hex("#059669"),
             color=get_color_from_hex("#FFFFFF"),
             disabled=False,
-            opacity=0.7,
+            opacity=1.0,
             size_hint_x=0.22,
             font_size="11sp"
         )
@@ -1808,10 +1852,10 @@ class TranscriberGUI(BoxLayout):
             text="Save Notes (.docx)",
             bold=True,
             background_normal="",
-            background_color=get_color_from_hex("#27272A"),
+            background_color=get_color_from_hex("#2563EB"),
             color=get_color_from_hex("#FFFFFF"),
             disabled=False,
-            opacity=0.7,
+            opacity=1.0,
             size_hint_x=0.20,
             font_size="11sp"
         )
@@ -3130,6 +3174,8 @@ class TranscriberGUI(BoxLayout):
 
         # 4. Clear input field, progress bar, and status
         self.file_input.text = ""
+        if hasattr(self, "input_queue_badge"):
+            self.input_queue_badge.text = "Ready | Drag & drop audio files or use Browse below"
         self.progress_bar.value = 0.0
         self.progress_bar.max = 1.0
         self.live_action_lbl.text = "Status: Ready"
@@ -4012,6 +4058,8 @@ class TranscriberGUI(BoxLayout):
             self._set_selected_audio(str(valid_paths[0]))
         else:
             self.file_input.text = "; ".join(str(p) for p in valid_paths)
+            if hasattr(self, "input_queue_badge"):
+                self.input_queue_badge.text = f"Batch Queue: {len(valid_paths)} files selected"
             self.source_audio_name = f"{len(valid_paths)} files ({valid_paths[0].name}, ...)"
             self.source_audio_path = str(valid_paths[0])
             self.current_title = f"Batch_{len(valid_paths)}_files"
@@ -4029,6 +4077,8 @@ class TranscriberGUI(BoxLayout):
     def _set_selected_audio(self, file_path: str):
         self.selected_audio_files = [Path(file_path).resolve()]
         self.file_input.text = file_path
+        if hasattr(self, "input_queue_badge"):
+            self.input_queue_badge.text = f"Ready: {Path(file_path).name}"
         self.source_audio_name = Path(file_path).name
         self.source_audio_path = file_path
         self.current_title = Path(file_path).stem

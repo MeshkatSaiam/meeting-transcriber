@@ -903,14 +903,14 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       if (selectedAudioFiles.length === 1) {
         const f = selectedAudioFiles[0];
         const sz = (f.size / (1024 * 1024)).toFixed(1);
-        lblFileName.innerText = `${f.name} (${sz} MB${f.size > 18 * 1024 * 1024 ? " — Auto-Compress ⚡" : ""})`;
+        lblFileName.innerText = `${f.name} (${sz} MB${f.size > 70 * 1024 * 1024 ? " — Auto-Compress ⚡" : ""})`;
         fileListContainer.classList.add("hidden");
       } else {
         lblFileName.innerText = `📁 ${selectedAudioFiles.length} audio files chosen (${totalMb} MB total)`;
         fileListContainer.classList.remove("hidden");
         fileListContainer.innerHTML = selectedAudioFiles.map((f, idx) => {
           const sz = (f.size / (1024 * 1024)).toFixed(1);
-          const needsCompress = f.size > 18 * 1024 * 1024 ? " ⚡" : "";
+          const needsCompress = f.size > 70 * 1024 * 1024 ? " ⚡" : "";
           return `
             <div class="flex items-center justify-between bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700/80">
               <span class="truncate flex-1 text-slate-200 mr-2 font-medium">${idx + 1}. ${f.name}</span>
@@ -931,9 +931,9 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       if (e.target.files && e.target.files.length > 0) {
         selectedAudioFiles = Array.from(e.target.files);
         updateFileListUI();
-        const hasLarge = selectedAudioFiles.some(f => f.size > 18 * 1024 * 1024);
+        const hasLarge = selectedAudioFiles.some(f => f.size > 70 * 1024 * 1024);
         if (hasLarge) {
-          showAlert("Auto-Compression Active", "One or more audio files exceed 18 MB. The app will automatically optimize and compress them into speech-grade MP3 before uploading.");
+          showAlert("Auto-Compression Active", "One or more audio files exceed 70 MB. The app will automatically optimize and segment them before uploading.");
         }
       }
     };
@@ -1798,10 +1798,34 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     // ==========================================
     // AUDIO PREPROCESSING & ENCODING ENGINE
     // ==========================================
-    async function preprocessAndCompressAudio(file, activeVoiceSamples, chunkMode, onProgress) {
-      if (!window.lamejs) {
-        throw new Error("Audio compressor (lamejs) is not ready. Please refresh the page.");
+    function encodeWavBlob(pcm16, sampleRate = 16000) {
+      const buffer = new ArrayBuffer(44 + pcm16.length * 2);
+      const view = new DataView(buffer);
+      function writeString(offset, str) {
+        for (let i = 0; i < str.length; i++) {
+          view.setUint8(offset + i, str.charCodeAt(i));
+        }
       }
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + pcm16.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true); // Linear PCM
+      view.setUint16(22, 1, true); // Mono
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true); // Byte rate (16000 * 2)
+      view.setUint16(32, 2, true); // Block align (1 * 2)
+      view.setUint16(34, 16, true); // 16 bits per sample
+      writeString(36, 'data');
+      view.setUint32(40, pcm16.length * 2, true);
+
+      const pcmByteView = new Int16Array(buffer, 44, pcm16.length);
+      pcmByteView.set(pcm16);
+      return new Blob([buffer], { type: "audio/wav" });
+    }
+
+    async function preprocessAndCompressAudio(file, activeVoiceSamples, chunkMode, onProgress) {
       const doNormalize = document.getElementById("chk-audio-normalize")?.checked ?? true;
       const doFilter = document.getElementById("chk-audio-filter")?.checked ?? true;
 
@@ -1943,7 +1967,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         }
       }
 
-      // 4. Encode Each Chunk to MP3 via lamejs
+      // 4. Encode Each Chunk to Speech-Grade Audio
       const preparedChunks = [];
       for (let cIdx = 0; cIdx < chunksMeta.length; cIdx++) {
         const cm = chunksMeta[cIdx];
@@ -1968,38 +1992,63 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         }
 
         const totalChunkSec = chunkFloat32.length / targetSampleRate;
-        let kbps = 32;
-        if (totalChunkSec > 5400) kbps = 16;
-        else if (totalChunkSec > 3000) kbps = 24;
-
         const progressPct = 55 + Math.round((cIdx / chunksMeta.length) * 35);
-        const chunkDesc = cm.totalChunks > 1
-          ? `Compressing chunk ${cm.chunkIndex}/${cm.totalChunks} (${formatTimestampSeconds(cm.startSec)}–${formatTimestampSeconds(cm.endSec)})...`
-          : `Compressing audio (${kbps}kbps MP3)...`;
-        onProgress(chunkDesc, progressPct);
+        const wavByteSize = 44 + pcm16.length * 2;
+        let chunkBlob;
+        let chunkMime;
+        let chunkExt;
 
-        const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
-        const mp3Chunks = [];
-        const chunkSize = 1152 * 32; // 36,864 samples per block
+        // Gemini inline limit is 100MB. For chunks <= 65MB uncompressed 16kHz mono WAV (~35 mins),
+        // use instant native WAV encoding (15ms vs 4 minutes of pure-JS lamejs MP3)!
+        if (wavByteSize <= 65 * 1024 * 1024) {
+          const chunkDesc = cm.totalChunks > 1
+            ? `Fast-encoding chunk ${cm.chunkIndex}/${cm.totalChunks} (Speech-grade 16kHz WAV ⚡)...`
+            : `Fast-encoding audio (Speech-grade 16kHz WAV ⚡)...`;
+          onProgress(chunkDesc, progressPct);
 
-        for (let i = 0; i < pcm16.length; i += chunkSize) {
-          const chunk = pcm16.subarray(i, i + chunkSize);
-          const mp3buf = mp3encoder.encodeBuffer(chunk);
-          if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
+          chunkBlob = encodeWavBlob(pcm16, targetSampleRate);
+          chunkMime = "audio/wav";
+          chunkExt = "wav";
+        } else if (window.lamejs) {
+          let kbps = 32;
+          if (totalChunkSec > 5400) kbps = 16;
+          else if (totalChunkSec > 3000) kbps = 24;
 
-          if ((i / chunkSize) % 15 === 0) {
-            await new Promise(r => setTimeout(r, 0));
+          const chunkDesc = cm.totalChunks > 1
+            ? `Compressing chunk ${cm.chunkIndex}/${cm.totalChunks} (${formatTimestampSeconds(cm.startSec)}–${formatTimestampSeconds(cm.endSec)})...`
+            : `Compressing audio (${kbps}kbps MP3)...`;
+          onProgress(chunkDesc, progressPct);
+
+          const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
+          const mp3Chunks = [];
+          const chunkSize = 1152 * 32;
+
+          for (let i = 0; i < pcm16.length; i += chunkSize) {
+            const chunk = pcm16.subarray(i, i + chunkSize);
+            const mp3buf = mp3encoder.encodeBuffer(chunk);
+            if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
+
+            if ((i / chunkSize) % 15 === 0) {
+              await new Promise(r => setTimeout(r, 0));
+            }
           }
+
+          const flushBuf = mp3encoder.flush();
+          if (flushBuf.length > 0) mp3Chunks.push(flushBuf);
+
+          chunkBlob = new Blob(mp3Chunks, { type: "audio/mp3" });
+          chunkMime = "audio/mp3";
+          chunkExt = "mp3";
+        } else {
+          chunkBlob = encodeWavBlob(pcm16, targetSampleRate);
+          chunkMime = "audio/wav";
+          chunkExt = "wav";
         }
 
-        const flushBuf = mp3encoder.flush();
-        if (flushBuf.length > 0) mp3Chunks.push(flushBuf);
-
-        const mp3Blob = new Blob(mp3Chunks, { type: "audio/mp3" });
         const chunkFileName = cm.totalChunks > 1
-          ? `${file.name.replace(/\.[^/.]+$/, "")}_chunk_${String(cm.chunkIndex).padStart(2, "0")}.mp3`
-          : `${file.name.replace(/\.[^/.]+$/, "")}.mp3`;
-        const chunkFile = new File([mp3Blob], chunkFileName, { type: "audio/mp3" });
+          ? `${file.name.replace(/\.[^/.]+$/, "")}_chunk_${String(cm.chunkIndex).padStart(2, "0")}.${chunkExt}`
+          : `${file.name.replace(/\.[^/.]+$/, "")}.${chunkExt}`;
+        const chunkFile = new File([chunkBlob], chunkFileName, { type: chunkMime });
         const base64Data = await fileToBase64(chunkFile);
 
         preparedChunks.push({
@@ -2009,7 +2058,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           endSec: cm.endSec,
           file: chunkFile,
           base64Data: base64Data,
-          mimeType: "audio/mp3",
+          mimeType: chunkMime,
           trackedRanges: trackedRanges
         });
       }
@@ -2293,14 +2342,24 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             setProgress(`File ${fileNum}/${totalFiles}: Reusing cached audio chunks (Instant ⚡)...`, basePct + 20);
             fileChunks = audioProcessCache.get(cacheKey).chunks;
           } else {
-            // Direct streaming check: if file is already a compressed audio format, <= 18.5MB, no voice profiles, chunking disabled, and DSP is off
-            const isCompressedFormat = /^(audio\/(mp3|mpeg|m4a|aac|ogg|webm|opus))$/i.test(currentFile.type) ||
-                                       /\.(mp3|m4a|aac|ogg|webm|opus)$/i.test(currentFile.name);
-            const isUnderLimit = currentFile.size <= 18.5 * 1024 * 1024;
+            // Direct streaming check: if file is already an audio format, <= 70MB (Gemini supports up to 100MB inline payload), no voice profiles, chunking disabled, and DSP is off
+            const isCompressedFormat = /^(audio\/(mp3|mpeg|m4a|aac|ogg|webm|opus|wav))$/i.test(currentFile.type) ||
+                                       /\.(mp3|m4a|aac|ogg|webm|opus|wav)$/i.test(currentFile.name);
+            const isUnderLimit = currentFile.size <= 70 * 1024 * 1024;
             const noSamples = activeVoiceSamples.length === 0;
 
             if (chunkMode === "disabled" && !doFilter && !doNormalize && isCompressedFormat && isUnderLimit && noSamples) {
-              setProgress(`File ${fileNum}/${totalFiles}: Fast Mode: Reading audio directly...`, basePct + 15);
+              setProgress(`File ${fileNum}/${totalFiles}: Fast Mode: Reading audio directly (0s compression ⚡)...`, basePct + 15);
+              let directMime = currentFile.type;
+              if (!directMime) {
+                const lower = currentFile.name.toLowerCase();
+                if (lower.endsWith(".m4a")) directMime = "audio/m4a";
+                else if (lower.endsWith(".aac")) directMime = "audio/aac";
+                else if (lower.endsWith(".wav")) directMime = "audio/wav";
+                else if (lower.endsWith(".ogg")) directMime = "audio/ogg";
+                else if (lower.endsWith(".webm")) directMime = "audio/webm";
+                else directMime = "audio/mp3";
+              }
               const b64 = await fileToBase64(currentFile);
               fileChunks = [{
                 chunkIndex: 1,
@@ -2309,7 +2368,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
                 endSec: 0,
                 file: currentFile,
                 base64Data: b64,
-                mimeType: currentFile.type || "audio/mp3",
+                mimeType: directMime,
                 trackedRanges: []
               }];
             } else {
