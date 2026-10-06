@@ -1183,7 +1183,8 @@ def process_chunk(chunk_info: tuple[int, float, float, Path], api_key: str, mode
             prompt = TRANSCRIPTION_PROMPT
             if guess_speakers:
                 prompt += f"\n\n{SPEAKER_GUESSING_PROMPT}"
-            print(f"\n{'='*60}\n[CHUNK {chunk_index} PROMPT SENT TO GEMINI (STANDARD)]\n{'='*60}\n{prompt}\n{'='*60}\n", flush=True)
+            mode_tag = "SMART GUESSING" if guess_speakers else "STANDARD"
+            print(f"\n{'='*60}\n[CHUNK {chunk_index} PROMPT SENT TO GEMINI ({mode_tag})]\n{'='*60}\n{prompt}\n{'='*60}\n", flush=True)
 
         if cancel_event and cancel_event.is_set():
             raise TranscriptionCancelledException("Transcription cancelled by user.")

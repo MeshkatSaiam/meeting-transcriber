@@ -4592,12 +4592,27 @@ class TranscriberGUI(BoxLayout):
                     }
                 }
                 batch_notes_combined = "\n\n\n".join(all_notes) if all_notes else ""
+                
+                # Save combined batch docx
+                out_setting = self.settings.get("default_output_folder", "").strip()
+                output_dir = Path(out_setting).resolve() if (out_setting and Path(out_setting).exists()) else Path("output").resolve()
+                output_dir.mkdir(parents=True, exist_ok=True)
+                batch_docx = output_dir / f"Batch_{total_files}_Files_Transcript.docx"
+                save_transcript_docx(
+                    output_path=batch_docx,
+                    title=f"Batch ({total_files} files)",
+                    merged_transcript=merged_res["transcript"],
+                    meeting_notes=batch_notes_combined if batch_notes_combined else None,
+                    metadata=merged_res["metadata"]
+                )
+
                 batch_auto_info = {
                     "notes": batch_notes_combined,
                     "topic_slug": f"batch_{total_files}_files",
                     "company_name": "Batch Mode",
                     "meeting_type": "Batch Meeting",
-                    "person_names": []
+                    "person_names": [],
+                    "transcript_path": batch_docx
                 }
                 Clock.schedule_once(lambda dt: self._on_transcription_success(merged_res, batch_auto_info))
 
@@ -4620,19 +4635,23 @@ class TranscriberGUI(BoxLayout):
             self.record_meeting_btn.disabled = False
             self.progress_bar.value = self.progress_bar.max
 
-            self.current_transcript = res["transcript"]
-            self.current_title = res["title"]
-            self.current_metadata = res["metadata"]
+            self.current_transcript = res.get("transcript", "")
+            self.current_title = res.get("title", "transcript")
+            self.current_metadata = res.get("metadata", {})
 
             if auto_save_info:
-                self.current_meeting_notes = auto_save_info["notes"]
-                self.current_topic_slug = auto_save_info["topic_slug"]
-                self.company_name = auto_save_info["company_name"]
-                self.meeting_type = auto_save_info["meeting_type"]
-                self.person_names = auto_save_info["person_names"]
+                self.current_meeting_notes = auto_save_info.get("notes", "")
+                self.current_topic_slug = auto_save_info.get("topic_slug", "")
+                self.company_name = auto_save_info.get("company_name", "")
+                self.meeting_type = auto_save_info.get("meeting_type", "")
+                self.person_names = auto_save_info.get("person_names", [])
                 
-                t_name = auto_save_info["transcript_path"].name
-                self.live_action_lbl.text = f"Auto-saved: {t_name}"
+                t_path = auto_save_info.get("transcript_path")
+                if t_path:
+                    t_name = getattr(t_path, "name", str(t_path))
+                    self.live_action_lbl.text = f"Auto-saved: {t_name}"
+                else:
+                    self.live_action_lbl.text = "Batch transcription complete! All files saved."
                 self.live_action_lbl.color = get_color_from_hex("#10B981")
                 self.tab_btn_history.text = f"History ({len(load_history())})"
             else:
