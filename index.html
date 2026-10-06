@@ -425,13 +425,9 @@
             </button>
           </div>
           <select id="select-model" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
-            <option value="gemini-flash-latest" selected>✨ gemini-flash-latest (Auto-tracks newest Google Flash)</option>
-            <option value="gemini-3.8-flash">gemini-3.8-flash (Gemini 3.8 Flash - Newest)</option>
-            <option value="gemini-3.6-flash">gemini-3.6-flash (Gemini 3.6 Flash)</option>
-            <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (Flash-Lite - High Quota & Speed)</option>
-            <option value="gemini-flash-lite-latest">gemini-flash-lite-latest (Auto-tracks newest Flash-Lite)</option>
-            <option value="gemini-3-pro">gemini-3-pro (Gemini 3 Pro - Deep Reasoning)</option>
-            <option value="gemini-pro-latest">gemini-pro-latest (Auto-tracks newest Pro)</option>
+            <option value="gemini-3.8-flash" selected>⚡ Gemini Flash (Latest: gemini-3.8-flash)</option>
+            <option value="gemini-3.5-flash-lite">🚀 Gemini Flash-Lite (Highest Quota: gemini-3.5-flash-lite)</option>
+            <option value="gemini-3-pro">🧠 Gemini Pro (Deep Reasoning: gemini-3-pro)</option>
             <option value="custom">✏️ Enter Custom Model Name...</option>
           </select>
           <div id="section-custom-model" class="hidden mt-2">
@@ -1890,54 +1886,58 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         const data = await res.json();
         if (!data.models || !Array.isArray(data.models)) throw new Error("No models returned by Google API");
 
-        // Filter to generateContent models
-        const geminiModels = data.models
+        // Clean out specialized / irrelevant non-transcription models (TTS, image, computer-use, etc.)
+        const cleanModels = data.models
           .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes("generateContent"))
           .map(m => m.name.replace(/^models\//, ""))
-          .filter(name => name.includes("gemini"));
+          .filter(name => {
+            const s = name.toLowerCase();
+            return s.includes("gemini") &&
+                   !s.includes("tts") &&
+                   !s.includes("image") &&
+                   !s.includes("computer-use") &&
+                   !s.includes("customtools") &&
+                   !s.includes("banana");
+          });
 
-        const selectModel = document.getElementById("select-model");
-        const prevValue = selectModel.value;
+        // 1. Identify newest Flash
+        const flashCandidates = cleanModels.filter(m => m.includes("flash") && !m.includes("lite"));
+        let bestFlash = "gemini-3.8-flash";
+        if (flashCandidates.includes("gemini-3.8-flash")) bestFlash = "gemini-3.8-flash";
+        else if (flashCandidates.includes("gemini-flash-latest")) bestFlash = "gemini-flash-latest";
+        else if (flashCandidates.includes("gemini-3.6-flash")) bestFlash = "gemini-3.6-flash";
+        else if (flashCandidates.length > 0) bestFlash = flashCandidates[0];
 
-        // Sort so newest models (3.8, 3.6, etc.) appear first
-        geminiModels.sort((a, b) => {
-          if (a.includes("3.8") && !b.includes("3.8")) return -1;
-          if (!a.includes("3.8") && b.includes("3.8")) return 1;
-          if (a.includes("3.6") && !b.includes("3.6")) return -1;
-          if (!a.includes("3.6") && b.includes("3.6")) return 1;
-          return a.localeCompare(b);
-        });
+        // 2. Identify newest Flash-Lite
+        const liteCandidates = cleanModels.filter(m => m.includes("lite"));
+        let bestLite = "gemini-3.5-flash-lite";
+        if (liteCandidates.includes("gemini-3.5-flash-lite")) bestLite = "gemini-3.5-flash-lite";
+        else if (liteCandidates.includes("gemini-flash-lite-latest")) bestLite = "gemini-flash-lite-latest";
+        else if (liteCandidates.includes("gemini-3.1-flash-lite")) bestLite = "gemini-3.1-flash-lite";
+        else if (liteCandidates.length > 0) bestLite = liteCandidates[0];
+
+        // 3. Identify newest Pro
+        const proCandidates = cleanModels.filter(m => m.includes("pro") && !m.includes("flash") && !m.includes("lite"));
+        let bestPro = "gemini-3-pro";
+        if (proCandidates.includes("gemini-3.1-pro")) bestPro = "gemini-3.1-pro";
+        else if (proCandidates.includes("gemini-3-pro")) bestPro = "gemini-3-pro";
+        else if (proCandidates.includes("gemini-pro-latest")) bestPro = "gemini-pro-latest";
+        else if (proCandidates.length > 0) bestPro = proCandidates[0];
 
         let html = `
-          <optgroup label="🌟 Google Canonical (Auto-Track Newest)">
-            <option value="gemini-flash-latest">✨ gemini-flash-latest (Auto-tracks newest Google Flash)</option>
-            <option value="gemini-flash-lite-latest">⚡ gemini-flash-lite-latest (Auto-tracks newest Flash-Lite)</option>
-            <option value="gemini-pro-latest">🧠 gemini-pro-latest (Auto-tracks newest Pro)</option>
-          </optgroup>
-          <optgroup label="🔥 Live Detected on Your Google Account">
-        `;
-
-        geminiModels.forEach(m => {
-          html += `<option value="${m}">${m}</option>`;
-        });
-
-        html += `
-          </optgroup>
-          <optgroup label="⚙️ Custom Model">
-            <option value="custom">✏️ Enter Custom Model Name...</option>
-          </optgroup>
+          <option value="${bestFlash}">⚡ Gemini Flash (Latest: ${bestFlash})</option>
+          <option value="${bestLite}">🚀 Gemini Flash-Lite (Highest Quota: ${bestLite})</option>
+          <option value="${bestPro}">🧠 Gemini Pro (Deep Reasoning: ${bestPro})</option>
+          <option value="custom">✏️ Enter Custom Model Name...</option>
         `;
 
         selectModel.innerHTML = html;
-        if (geminiModels.includes(prevValue) || prevValue === "gemini-flash-latest" || prevValue === "custom") {
-          selectModel.value = prevValue;
-        } else if (geminiModels.includes("gemini-3.8-flash")) {
-          selectModel.value = "gemini-3.8-flash";
-        } else {
-          selectModel.value = "gemini-flash-latest";
-        }
+        if (prevValue === bestLite) selectModel.value = bestLite;
+        else if (prevValue === bestPro) selectModel.value = bestPro;
+        else if (prevValue === "custom") selectModel.value = "custom";
+        else selectModel.value = bestFlash;
 
-        if (!silent) showAlert("Models Updated", `Detected ${geminiModels.length} active models enabled for your Google Gemini account!`);
+        if (!silent) showAlert("Models Updated", `Sorted! Curated to top 3 models: Flash (${bestFlash}), Flash-Lite (${bestLite}), and Pro (${bestPro}).`);
       } catch (err) {
         console.warn("Could not fetch models live:", err);
         if (!silent) showAlert("Online Check Failed", "Could not query models list: " + err.message + "\nStandard presets remain active.");

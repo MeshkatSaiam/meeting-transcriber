@@ -50,23 +50,18 @@ if getattr(sys, "stderr", None) is not None and hasattr(sys.stderr, "encoding") 
     except Exception:
         pass
 
-DEFAULT_MODEL = "gemini-flash-latest"
-FALLBACK_MODEL = "gemini-flash-lite-latest"
+DEFAULT_MODEL = "gemini-3.8-flash"
+FALLBACK_MODEL = "gemini-3.5-flash-lite"
 AVAILABLE_MODELS = [
-    "gemini-flash-latest",
     "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-pro-latest",
-    "gemini-3-pro",
+    "gemini-3-pro"
 ]
 MAX_RETRIES_PER_MODEL = 3
 MIN_CHUNK_DURATION = 3.0  # Minimum seconds required for a valid audio chunk
 
 def fetch_available_gemini_models(api_key: str = None) -> list[str]:
-    """Queries Google Generative Language API dynamically for available Gemini models."""
+    """Queries Google Generative Language API dynamically and returns only the top 3 curated models (Flash, Flash-Lite, Pro)."""
     if not api_key:
         api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
@@ -83,13 +78,38 @@ def fetch_available_gemini_models(api_key: str = None) -> list[str]:
                 if "generateContent" in m.get("supportedGenerationMethods", [])
                 and "gemini" in m.get("name", "")
             ]
-            if models:
-                canonical = ["gemini-flash-latest", "gemini-flash-lite-latest", "gemini-pro-latest"]
-                return canonical + [m for m in models if m not in canonical]
+            clean = [
+                m for m in models
+                if not any(x in m.lower() for x in ["tts", "image", "computer-use", "customtools", "banana"])
+            ]
+            # Best flash
+            flash_cands = [m for m in clean if "flash" in m and "lite" not in m]
+            best_flash = "gemini-3.8-flash"
+            if "gemini-3.8-flash" in flash_cands: best_flash = "gemini-3.8-flash"
+            elif "gemini-flash-latest" in flash_cands: best_flash = "gemini-flash-latest"
+            elif "gemini-3.6-flash" in flash_cands: best_flash = "gemini-3.6-flash"
+            elif flash_cands: best_flash = flash_cands[0]
+
+            # Best lite
+            lite_cands = [m for m in clean if "lite" in m]
+            best_lite = "gemini-3.5-flash-lite"
+            if "gemini-3.5-flash-lite" in lite_cands: best_lite = "gemini-3.5-flash-lite"
+            elif "gemini-flash-lite-latest" in lite_cands: best_lite = "gemini-flash-lite-latest"
+            elif "gemini-3.1-flash-lite" in lite_cands: best_lite = "gemini-3.1-flash-lite"
+            elif lite_cands: best_lite = lite_cands[0]
+
+            # Best pro
+            pro_cands = [m for m in clean if "pro" in m and "flash" not in m and "lite" not in m]
+            best_pro = "gemini-3-pro"
+            if "gemini-3.1-pro" in pro_cands: best_pro = "gemini-3.1-pro"
+            elif "gemini-3-pro" in pro_cands: best_pro = "gemini-3-pro"
+            elif "gemini-pro-latest" in pro_cands: best_pro = "gemini-pro-latest"
+            elif pro_cands: best_pro = pro_cands[0]
+
+            return [best_flash, best_lite, best_pro]
     except Exception as e:
         print(f"[Model Discovery]: {e}", file=sys.stderr)
     return AVAILABLE_MODELS
-MIN_CHUNK_DURATION = 3.0  # Minimum seconds required for a valid audio chunk
 
 class TranscriptionCancelledException(Exception):
     """Raised when transcription is explicitly cancelled by the user."""

@@ -80,14 +80,9 @@ if getattr(sys, "stderr", None) is not None and hasattr(sys.stderr, "encoding") 
         pass
 
 AVAILABLE_MODELS = [
-    "gemini-flash-latest",
     "gemini-3.8-flash",
-    "gemini-3.6-flash",
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
-    "gemini-flash-lite-latest",
-    "gemini-pro-latest",
-    "gemini-3-pro",
+    "gemini-3-pro"
 ]
 
 HISTORY_FILE = Path("history.json")
