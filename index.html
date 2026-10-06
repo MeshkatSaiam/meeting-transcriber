@@ -903,14 +903,14 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       if (selectedAudioFiles.length === 1) {
         const f = selectedAudioFiles[0];
         const sz = (f.size / (1024 * 1024)).toFixed(1);
-        lblFileName.innerText = `${f.name} (${sz} MB${f.size > 70 * 1024 * 1024 ? " — Auto-Compress ⚡" : ""})`;
+        lblFileName.innerText = `${f.name} (${sz} MB${f.size > 100 * 1024 * 1024 ? " — Auto-Compress ⚡" : ""})`;
         fileListContainer.classList.add("hidden");
       } else {
         lblFileName.innerText = `📁 ${selectedAudioFiles.length} audio files chosen (${totalMb} MB total)`;
         fileListContainer.classList.remove("hidden");
         fileListContainer.innerHTML = selectedAudioFiles.map((f, idx) => {
           const sz = (f.size / (1024 * 1024)).toFixed(1);
-          const needsCompress = f.size > 70 * 1024 * 1024 ? " ⚡" : "";
+          const needsCompress = f.size > 100 * 1024 * 1024 ? " ⚡" : "";
           return `
             <div class="flex items-center justify-between bg-slate-900/90 px-3 py-2 rounded-xl border border-slate-700/80">
               <span class="truncate flex-1 text-slate-200 mr-2 font-medium">${idx + 1}. ${f.name}</span>
@@ -931,9 +931,9 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
       if (e.target.files && e.target.files.length > 0) {
         selectedAudioFiles = Array.from(e.target.files);
         updateFileListUI();
-        const hasLarge = selectedAudioFiles.some(f => f.size > 70 * 1024 * 1024);
+        const hasLarge = selectedAudioFiles.some(f => f.size > 100 * 1024 * 1024);
         if (hasLarge) {
-          showAlert("Auto-Compression Active", "One or more audio files exceed 70 MB. The app will automatically optimize and segment them before uploading.");
+          showAlert("Auto-Compression Active", "One or more audio files exceed 100 MB. The app will automatically optimize and segment them before uploading.");
         }
       }
     };
@@ -2342,10 +2342,10 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             setProgress(`File ${fileNum}/${totalFiles}: Reusing cached audio chunks (Instant ⚡)...`, basePct + 20);
             fileChunks = audioProcessCache.get(cacheKey).chunks;
           } else {
-            // Direct streaming check: if file is already an audio format, <= 70MB (Gemini supports up to 100MB inline payload), no voice profiles, chunking disabled, and DSP is off
+            // Direct streaming check: if file is already an audio format, <= 100MB (Gemini max inline payload limit), no voice profiles, chunking disabled, and DSP is off
             const isCompressedFormat = /^(audio\/(mp3|mpeg|m4a|aac|ogg|webm|opus|wav))$/i.test(currentFile.type) ||
                                        /\.(mp3|m4a|aac|ogg|webm|opus|wav)$/i.test(currentFile.name);
-            const isUnderLimit = currentFile.size <= 70 * 1024 * 1024;
+            const isUnderLimit = currentFile.size <= 100 * 1024 * 1024;
             const noSamples = activeVoiceSamples.length === 0;
 
             if (chunkMode === "disabled" && !doFilter && !doNormalize && isCompressedFormat && isUnderLimit && noSamples) {
