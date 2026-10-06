@@ -485,6 +485,25 @@
               <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-sky-500"></div>
             </label>
           </div>
+
+          <!-- Smart Audio Chunking Selector -->
+          <div class="pt-2 border-t border-slate-700/50 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-slate-200">Audio Segmentation & Chunking</div>
+                <div class="text-[11px] text-slate-400">Slices long audio with automatic timestamp sync to prevent hallucination</div>
+              </div>
+              <span class="text-[10px] bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-0.5 rounded-full font-mono">Precision ⏱️</span>
+            </div>
+            <select id="select-chunk-mode" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
+              <option value="auto" selected>⚡ Auto Chunking (15–20 min slices for audio > 20 min)</option>
+              <option value="10">10 Minutes per chunk</option>
+              <option value="15">15 Minutes per chunk</option>
+              <option value="20">20 Minutes per chunk</option>
+              <option value="30">30 Minutes per chunk</option>
+              <option value="disabled">Disabled (Single file, no chunking)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -1708,9 +1727,78 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     loadAndRenderVoiceSamples();
 
     // ==========================================
+    // AUDIO TIMESTAMP SYNCHRONIZATION & CHUNKING HELPERS
+    // ==========================================
+    function formatTimestampSeconds(seconds) {
+      const totalSec = Math.max(0, Math.round(seconds));
+      const hours = Math.floor(totalSec / 3600);
+      const minutes = Math.floor((totalSec % 3600) / 60);
+      const secs = totalSec % 60;
+      if (hours > 0) {
+        return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+      }
+      return `${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+    }
+
+    function shiftTimestampsInText(text, offsetSec) {
+      if (!text || offsetSec <= 0) return text;
+
+      function shiftTimeStr(t) {
+        const parts = t.split(":").map(p => parseInt(p.trim(), 10));
+        let totalSec = 0;
+        if (parts.length === 2) {
+          totalSec = parts[0] * 60 + parts[1];
+        } else if (parts.length === 3) {
+          totalSec = parts[0] * 3600 + parts[1] * 60 + parts[2];
+        } else {
+          return t;
+        }
+        return formatTimestampSeconds(totalSec + offsetSec);
+      }
+
+      // 1. Range pattern: [ MM:SS - MM:SS ] or [MM:SS-MM:SS]
+      let res = text.replace(/\[\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*[-–—to]+\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\]/g, (match, p1, p2) => {
+        return `[${shiftTimeStr(p1)} - ${shiftTimeStr(p2)}]`;
+      });
+
+      // 2. Single timestamp pattern: [ MM:SS ] or [MM:SS]
+      res = res.replace(/\[\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\]/g, (match, p1) => {
+        return `[${shiftTimeStr(p1)}]`;
+      });
+
+      // 3. Parentheses timestamps: ( MM:SS )
+      res = res.replace(/\(\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\)/g, (match, p1) => {
+        return `[${shiftTimeStr(p1)}]`;
+      });
+
+      // 4. Bold timestamps: **00:15** or **[00:15]**
+      res = res.replace(/\*\*\s*\[?\s*(\d{1,2}:\d{2}(?::\d{2})?)\s*\]?\s*\*\*/g, (match, p1) => {
+        return `[${shiftTimeStr(p1)}]`;
+      });
+
+      return res;
+    }
+
+    function cleanChunkTranscript(text) {
+      if (!text) return "";
+      const lines = text.trim().split("\n");
+      const cleaned = [];
+      for (const line of lines) {
+        const stripped = line.trim();
+        if (/^(here is the|sure, here is|below is the|transcript:|---|\*\*\*|note:)/i.test(stripped)) {
+          continue;
+        }
+        if (stripped) {
+          cleaned.push(stripped);
+        }
+      }
+      return cleaned.join("\n\n");
+    }
+
+    // ==========================================
     // AUDIO PREPROCESSING & ENCODING ENGINE
     // ==========================================
-    async function preprocessAndCompressAudio(file, activeVoiceSamples, onProgress) {
+    async function preprocessAndCompressAudio(file, activeVoiceSamples, chunkMode, onProgress) {
       if (!window.lamejs) {
         throw new Error("Audio compressor (lamejs) is not ready. Please refresh the page.");
       }
@@ -1771,14 +1859,13 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         }
       }
 
-      // 2. Decode and Concatenate Active Voice Samples if any
+      // 2. Decode Active Voice Samples (if any) to prepend to each chunk
       let trackedRanges = [];
-      let finalFloat32 = float32Meeting;
+      let sampleBuffers = [];
+      let totalSampleLength = 0;
 
       if (activeVoiceSamples && activeVoiceSamples.length > 0) {
-        onProgress(`Prepending ${activeVoiceSamples.length} speaker voice profile(s)...`, 45);
-        let sampleBuffers = [];
-        let totalSampleLength = 0;
+        onProgress(`Processing ${activeVoiceSamples.length} speaker voice profile(s)...`, 45);
 
         for (const s of activeVoiceSamples) {
           try {
@@ -1804,70 +1891,141 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
         }
 
         if (sampleBuffers.length > 0) {
-          const combinedLength = totalSampleLength + float32Meeting.length;
-          finalFloat32 = new Float32Array(combinedLength);
-
           let currentOffset = 0;
           for (const sb of sampleBuffers) {
             const startSec = (currentOffset / targetSampleRate).toFixed(1);
-            finalFloat32.set(sb.buffer, currentOffset);
             currentOffset += sb.buffer.length;
             const endSec = (currentOffset / targetSampleRate).toFixed(1);
             trackedRanges.push({ name: sb.name, startSec, endSec });
           }
-          finalFloat32.set(float32Meeting, currentOffset);
         }
       }
 
-      // 3. Convert Float32 to Int16
-      onProgress("Converting samples to 16-bit PCM...", 55);
-      const pcm16 = new Int16Array(finalFloat32.length);
-      for (let i = 0; i < finalFloat32.length; i++) {
-        let s = Math.max(-1, Math.min(1, finalFloat32[i]));
-        pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
-      }
-
-      // 4. Encode to MP3 via lamejs
-      const totalDurSec = finalFloat32.length / targetSampleRate;
-      let kbps = 32;
-      if (totalDurSec > 5400) kbps = 16;
-      else if (totalDurSec > 3000) kbps = 24;
-
-      onProgress(`Compressing audio to ${kbps}kbps MP3...`, 60);
-      const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
-      const mp3Chunks = [];
-      const chunkSize = 1152 * 32; // 36,864 samples per block -> 4x fewer loop cycles & faster compression
-
-      for (let i = 0; i < pcm16.length; i += chunkSize) {
-        const chunk = pcm16.subarray(i, i + chunkSize);
-        const mp3buf = mp3encoder.encodeBuffer(chunk);
-        if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
-
-        if ((i / chunkSize) % 10 === 0) {
-          const pct = Math.min(85, 60 + Math.round((i / pcm16.length) * 25));
-          onProgress(`Compressing speech audio (${pct}%)...`, pct);
-          await new Promise(r => setTimeout(r, 0));
+      // 3. Determine Chunk Ranges
+      let targetChunkSec = null;
+      if (chunkMode === "10") targetChunkSec = 10 * 60;
+      else if (chunkMode === "15") targetChunkSec = 15 * 60;
+      else if (chunkMode === "20") targetChunkSec = 20 * 60;
+      else if (chunkMode === "30") targetChunkSec = 30 * 60;
+      else if (chunkMode === "disabled") targetChunkSec = null;
+      else {
+        // Auto mode: segment audio > 20 min into 15–20 min slices
+        if (durationSec > 20 * 60) {
+          targetChunkSec = durationSec > 60 * 60 ? 20 * 60 : 15 * 60;
         }
       }
 
-      const flushBuf = mp3encoder.flush();
-      if (flushBuf.length > 0) mp3Chunks.push(flushBuf);
+      let chunksMeta = [];
+      if (!targetChunkSec || durationSec <= targetChunkSec + 30) {
+        chunksMeta = [{
+          chunkIndex: 1,
+          totalChunks: 1,
+          startSec: 0,
+          endSec: durationSec,
+          startSample: 0,
+          endSample: float32Meeting.length
+        }];
+      } else {
+        const numChunks = Math.ceil(durationSec / targetChunkSec);
+        for (let k = 0; k < numChunks; k++) {
+          const cStartSec = k * targetChunkSec;
+          const cEndSec = Math.min(durationSec, (k + 1) * targetChunkSec);
+          const startSample = Math.round(cStartSec * targetSampleRate);
+          const endSample = Math.min(float32Meeting.length, Math.round(cEndSec * targetSampleRate));
+          chunksMeta.push({
+            chunkIndex: k + 1,
+            totalChunks: numChunks,
+            startSec: cStartSec,
+            endSec: cEndSec,
+            startSample: startSample,
+            endSample: endSample
+          });
+        }
+      }
 
-      const mp3Blob = new Blob(mp3Chunks, { type: "audio/mp3" });
-      const compressedFile = new File([mp3Blob], file.name.replace(/\.[^/.]+$/, "") + ".mp3", { type: "audio/mp3" });
+      // 4. Encode Each Chunk to MP3 via lamejs
+      const preparedChunks = [];
+      for (let cIdx = 0; cIdx < chunksMeta.length; cIdx++) {
+        const cm = chunksMeta[cIdx];
+        const meetingSlice = float32Meeting.subarray(cm.startSample, cm.endSample);
+        let chunkFloat32 = meetingSlice;
+
+        if (sampleBuffers.length > 0) {
+          chunkFloat32 = new Float32Array(totalSampleLength + meetingSlice.length);
+          let off = 0;
+          for (const sb of sampleBuffers) {
+            chunkFloat32.set(sb.buffer, off);
+            off += sb.buffer.length;
+          }
+          chunkFloat32.set(meetingSlice, off);
+        }
+
+        // Convert Float32 to Int16
+        const pcm16 = new Int16Array(chunkFloat32.length);
+        for (let i = 0; i < chunkFloat32.length; i++) {
+          let s = Math.max(-1, Math.min(1, chunkFloat32[i]));
+          pcm16[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+        }
+
+        const totalChunkSec = chunkFloat32.length / targetSampleRate;
+        let kbps = 32;
+        if (totalChunkSec > 5400) kbps = 16;
+        else if (totalChunkSec > 3000) kbps = 24;
+
+        const progressPct = 55 + Math.round((cIdx / chunksMeta.length) * 35);
+        const chunkDesc = cm.totalChunks > 1
+          ? `Compressing chunk ${cm.chunkIndex}/${cm.totalChunks} (${formatTimestampSeconds(cm.startSec)}–${formatTimestampSeconds(cm.endSec)})...`
+          : `Compressing audio (${kbps}kbps MP3)...`;
+        onProgress(chunkDesc, progressPct);
+
+        const mp3encoder = new lamejs.Mp3Encoder(1, targetSampleRate, kbps);
+        const mp3Chunks = [];
+        const chunkSize = 1152 * 32; // 36,864 samples per block
+
+        for (let i = 0; i < pcm16.length; i += chunkSize) {
+          const chunk = pcm16.subarray(i, i + chunkSize);
+          const mp3buf = mp3encoder.encodeBuffer(chunk);
+          if (mp3buf.length > 0) mp3Chunks.push(mp3buf);
+
+          if ((i / chunkSize) % 15 === 0) {
+            await new Promise(r => setTimeout(r, 0));
+          }
+        }
+
+        const flushBuf = mp3encoder.flush();
+        if (flushBuf.length > 0) mp3Chunks.push(flushBuf);
+
+        const mp3Blob = new Blob(mp3Chunks, { type: "audio/mp3" });
+        const chunkFileName = cm.totalChunks > 1
+          ? `${file.name.replace(/\.[^/.]+$/, "")}_chunk_${String(cm.chunkIndex).padStart(2, "0")}.mp3`
+          : `${file.name.replace(/\.[^/.]+$/, "")}.mp3`;
+        const chunkFile = new File([mp3Blob], chunkFileName, { type: "audio/mp3" });
+        const base64Data = await fileToBase64(chunkFile);
+
+        preparedChunks.push({
+          chunkIndex: cm.chunkIndex,
+          totalChunks: cm.totalChunks,
+          startSec: cm.startSec,
+          endSec: cm.endSec,
+          file: chunkFile,
+          base64Data: base64Data,
+          mimeType: "audio/mp3",
+          trackedRanges: trackedRanges
+        });
+      }
 
       return {
-        file: compressedFile,
-        trackedRanges: trackedRanges
+        chunks: preparedChunks,
+        totalDurationSec: durationSec
       };
     }
 
     // Audio Preprocessing Cache to prevent repeated compression on network errors or retries
     const audioProcessCache = new Map();
 
-    function getAudioCacheKey(file, activeVoiceSamples, doNormalize, doFilter) {
+    function getAudioCacheKey(file, activeVoiceSamples, doNormalize, doFilter, chunkMode) {
       const sampleIds = (activeVoiceSamples || []).map(s => s.id || s.name).join("_");
-      return `${file.name}_${file.size}_${file.lastModified || 0}_${sampleIds}_${doNormalize}_${doFilter}`;
+      return `${file.name}_${file.size}_${file.lastModified || 0}_${sampleIds}_${doNormalize}_${doFilter}_${chunkMode || 'auto'}`;
     }
 
     // Dynamic Gemini Model Discovery & Custom Model Handling
@@ -2097,6 +2255,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
       const generateNotes = document.getElementById("chk-notes")?.checked ?? true;
       const guessSpeakers = document.getElementById("chk-guess-speakers")?.checked ?? true;
+      const chunkMode = document.getElementById("select-chunk-mode")?.value || "auto";
       const doNormalize = document.getElementById("chk-audio-normalize")?.checked ?? true;
       const doFilter = document.getElementById("chk-audio-filter")?.checked ?? true;
       const btnStart = document.getElementById("btn-start");
@@ -2125,155 +2284,159 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           const basePct = Math.round((i / totalFiles) * 75);
           const stepWeight = 75 / totalFiles;
 
-          const cacheKey = getAudioCacheKey(currentFile, activeVoiceSamples, doNormalize, doFilter);
-          let fileToUpload;
-          let trackedRanges = [];
-          let base64Data;
-          let audioMimeType;
+          const cacheKey = getAudioCacheKey(currentFile, activeVoiceSamples, doNormalize, doFilter, chunkMode);
+          let fileChunks = [];
 
           // 1. Check in-memory Cache for instant reuse without re-compressing
           if (audioProcessCache.has(cacheKey)) {
-            setProgress(`File ${fileNum}/${totalFiles}: Reusing cached compressed audio (Instant)...`, basePct + 20);
-            const cached = audioProcessCache.get(cacheKey);
-            fileToUpload = cached.file;
-            trackedRanges = cached.trackedRanges;
-            base64Data = cached.base64Data;
-            audioMimeType = cached.mimeType;
+            setProgress(`File ${fileNum}/${totalFiles}: Reusing cached audio chunks (Instant ⚡)...`, basePct + 20);
+            fileChunks = audioProcessCache.get(cacheKey).chunks;
           } else {
-            // Direct streaming check: if file is already a compressed audio format, <= 18.5MB, no voice profiles, and DSP is off
+            // Direct streaming check: if file is already a compressed audio format, <= 18.5MB, no voice profiles, chunking disabled, and DSP is off
             const isCompressedFormat = /^(audio\/(mp3|mpeg|m4a|aac|ogg|webm|opus))$/i.test(currentFile.type) ||
                                        /\.(mp3|m4a|aac|ogg|webm|opus)$/i.test(currentFile.name);
             const isUnderLimit = currentFile.size <= 18.5 * 1024 * 1024;
             const noSamples = activeVoiceSamples.length === 0;
 
-            if (!doFilter && !doNormalize && isCompressedFormat && isUnderLimit && noSamples) {
+            if (chunkMode === "disabled" && !doFilter && !doNormalize && isCompressedFormat && isUnderLimit && noSamples) {
               setProgress(`File ${fileNum}/${totalFiles}: Fast Mode: Reading audio directly...`, basePct + 15);
-              fileToUpload = currentFile;
-              trackedRanges = [];
-              audioMimeType = currentFile.type || "audio/mp3";
-              base64Data = await fileToBase64(fileToUpload);
+              const b64 = await fileToBase64(currentFile);
+              fileChunks = [{
+                chunkIndex: 1,
+                totalChunks: 1,
+                startSec: 0,
+                endSec: 0,
+                file: currentFile,
+                base64Data: b64,
+                mimeType: currentFile.type || "audio/mp3",
+                trackedRanges: []
+              }];
             } else {
-              setProgress(`File ${fileNum}/${totalFiles}: Preprocessing & optimizing audio...`, basePct + 5);
-              const processedResult = await preprocessAndCompressAudio(currentFile, activeVoiceSamples, (msg, pct) => {
-                setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.6));
+              setProgress(`File ${fileNum}/${totalFiles}: Segmenting & compressing audio...`, basePct + 5);
+              const processedResult = await preprocessAndCompressAudio(currentFile, activeVoiceSamples, chunkMode, (msg, pct) => {
+                setProgress(`File ${fileNum}/${totalFiles}: ${msg}`, basePct + Math.round((pct / 100) * stepWeight * 0.55));
               });
 
-              fileToUpload = processedResult.file;
-              trackedRanges = processedResult.trackedRanges;
-              audioMimeType = fileToUpload.type || "audio/mp3";
-
-              const finalSizeMb = fileToUpload.size / (1024 * 1024);
-              if (finalSizeMb > 19.5) {
-                throw new Error(`File ${fileNum} is ${finalSizeMb.toFixed(1)} MB after compression, exceeding the 19.5 MB limit.`);
-              }
-
-              setProgress(`File ${fileNum}/${totalFiles}: Reading audio data...`, basePct + Math.round(stepWeight * 0.7));
-              base64Data = await fileToBase64(fileToUpload);
+              fileChunks = processedResult.chunks;
             }
 
             // Save to memory cache for zero-delay retries
-            audioProcessCache.set(cacheKey, {
-              file: fileToUpload,
-              trackedRanges,
-              base64Data,
-              mimeType: audioMimeType
-            });
+            audioProcessCache.set(cacheKey, { chunks: fileChunks });
           }
 
-          const audioPart = {
-            inlineData: {
-              mimeType: audioMimeType,
-              data: base64Data
-            }
-          };
-
-          // Build Transcription Prompt
-          let promptToUse = TRANSCRIPTION_PROMPT;
-
-          // Feature 5: Contextual Speaker Guessing Instruction
-          if (guessSpeakers) {
-            promptToUse += `\n\nCRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:\n` +
-              `1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').\n` +
-              `2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').\n` +
-              `3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.\n` +
-              `4. Maintain consistent speaker identification across the entire conversation.\n`;
-          }
-
-          // Voice Sample Profile Stitching (if enrolled)
-          if (trackedRanges && trackedRanges.length > 0) {
-            const prefixDurationSec = trackedRanges[trackedRanges.length - 1].endSec;
-            const speakerDetails = trackedRanges.map(tr => `- Seconds ${tr.startSec}s to ${tr.endSec}s: Reference clip for "${tr.name}"`).join("\n");
-            const namesList = trackedRanges.map(tr => `"${tr.name}"`).join(", ");
-
-            promptToUse += `\n\nCRITICAL SPEAKER IDENTIFICATION & VOICE MATCHING INSTRUCTIONS:\n` +
-              `The first ${prefixDurationSec} seconds of this audio contain REFERENCE VOICE SAMPLES for enrolled participants:\n` +
-              `${speakerDetails}\n\n` +
-              `MANDATORY SPEAKER DIARIZATION RULES:\n` +
-              `1. ZERO REFERENCE TRANSCRIPTION: DO NOT transcribe speech from the first ${prefixDurationSec} seconds. The actual meeting starts at ${prefixDurationSec} seconds.\n` +
-              `2. VOICE RECOGNITION & NAMING: Compare the voices in the meeting with the reference voice samples above. When a voice matches, you MUST label their speaker turns using their actual name: ${namesList} (e.g. '[00:15] ${trackedRanges[0].name}: ...').\n` +
-              `3. For any other speaker whose voice does not match the enrolled samples, label them as "Speaker 2", "Speaker 3", etc.\n`;
-          }
-
-          // Step 1: Transcribe via Gemini (with automatic Flash-Lite fallback on quota limit)
+          // 2. Sequential Chunk Transcription with Dynamic Timestamp Synchronization
+          const fileChunkTranscripts = [];
+          const numChunks = fileChunks.length;
           let activeModel = model;
-          setProgress(`File ${fileNum}/${totalFiles}: Transcribing with ${activeModel}...`, basePct + Math.round(stepWeight * 0.85));
 
-          async function requestGeminiTranscription(m) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
-            return await fetch(url, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                contents: [{ parts: [audioPart, { text: promptToUse }] }]
-              })
-            });
-          }
+          for (let cIdx = 0; cIdx < numChunks; cIdx++) {
+            const chunk = fileChunks[cIdx];
+            const chunkFraction = (cIdx / numChunks);
+            const chunkProgress = basePct + Math.round(stepWeight * 0.55) + Math.round(chunkFraction * stepWeight * 0.40);
+            const chunkTimeLabel = chunk.totalChunks > 1 ? ` (${formatTimestampSeconds(chunk.startSec)}–${formatTimestampSeconds(chunk.endSec)})` : "";
 
-          let genResp = await requestGeminiTranscription(activeModel);
+            setProgress(`File ${fileNum}/${totalFiles}: Transcribing ${chunk.totalChunks > 1 ? `chunk ${chunk.chunkIndex}/${chunk.totalChunks}${chunkTimeLabel}` : 'audio'} with ${activeModel}...`, chunkProgress);
 
-          // If initial model is not enabled for this key (404), cascade gracefully
-          if (!genResp.ok && genResp.status === 404) {
-            let alt = activeModel;
-            if (activeModel.includes("flash") && !activeModel.includes("lite")) alt = "gemini-2.5-flash";
-            else if (activeModel.includes("pro")) alt = "gemini-2.5-pro";
-            else if (activeModel.includes("lite")) alt = "gemini-2.5-flash-lite";
-            if (alt !== activeModel) {
-              activeModel = alt;
-              genResp = await requestGeminiTranscription(activeModel);
+            const audioPart = {
+              inlineData: {
+                mimeType: chunk.mimeType,
+                data: chunk.base64Data
+              }
+            };
+
+            // Build Transcription Prompt
+            let promptToUse = TRANSCRIPTION_PROMPT;
+
+            // Contextual Speaker Guessing Instruction
+            if (guessSpeakers) {
+              promptToUse += `\n\nCRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:\n` +
+                `1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').\n` +
+                `2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').\n` +
+                `3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.\n` +
+                `4. Maintain consistent speaker identification across the entire conversation.\n`;
             }
-          }
 
-          // If quota reached (429 or RESOURCE_EXHAUSTED) and not already on flash-lite, fallback!
-          if (genResp.status === 429 && !activeModel.includes("lite")) {
-            setProgress(`⚠️ Quota limit on ${activeModel}. Automatically falling back to Gemini Flash-Lite...`, basePct + Math.round(stepWeight * 0.85));
-            activeModel = "gemini-flash-lite-latest";
-            genResp = await requestGeminiTranscription(activeModel);
+            // Voice Sample Profile Stitching (if enrolled)
+            if (chunk.trackedRanges && chunk.trackedRanges.length > 0) {
+              const prefixDurationSec = chunk.trackedRanges[chunk.trackedRanges.length - 1].endSec;
+              const speakerDetails = chunk.trackedRanges.map(tr => `- Seconds ${tr.startSec}s to ${tr.endSec}s: Reference clip for "${tr.name}"`).join("\n");
+              const namesList = chunk.trackedRanges.map(tr => `"${tr.name}"`).join(", ");
+
+              promptToUse += `\n\nCRITICAL SPEAKER IDENTIFICATION & VOICE MATCHING INSTRUCTIONS:\n` +
+                `The first ${prefixDurationSec} seconds of this audio contain REFERENCE VOICE SAMPLES for enrolled participants:\n` +
+                `${speakerDetails}\n\n` +
+                `MANDATORY SPEAKER DIARIZATION RULES:\n` +
+                `1. ZERO REFERENCE TRANSCRIPTION: DO NOT transcribe speech from the first ${prefixDurationSec} seconds. The actual meeting starts at ${prefixDurationSec} seconds.\n` +
+                `2. VOICE RECOGNITION & NAMING: Compare the voices in the meeting with the reference voice samples above. When a voice matches, you MUST label their speaker turns using their actual name: ${namesList} (e.g. '[00:15] ${chunk.trackedRanges[0].name}: ...').\n` +
+                `3. For any other speaker whose voice does not match the enrolled samples, label them as "Speaker 2", "Speaker 3", etc.\n`;
+            }
+
+            async function requestGeminiTranscription(m) {
+              const url = `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent?key=${apiKey}`;
+              return await fetch(url, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  contents: [{ parts: [audioPart, { text: promptToUse }] }]
+                })
+              });
+            }
+
+            let genResp = await requestGeminiTranscription(activeModel);
+
+            // If initial model is not enabled for this key (404), cascade gracefully
             if (!genResp.ok && genResp.status === 404) {
-              activeModel = "gemini-3.5-flash-lite";
-              genResp = await requestGeminiTranscription(activeModel);
+              let alt = activeModel;
+              if (activeModel.includes("flash") && !activeModel.includes("lite")) alt = "gemini-2.5-flash";
+              else if (activeModel.includes("pro")) alt = "gemini-2.5-pro";
+              else if (activeModel.includes("lite")) alt = "gemini-2.5-flash-lite";
+              if (alt !== activeModel) {
+                activeModel = alt;
+                genResp = await requestGeminiTranscription(activeModel);
+              }
             }
-            if (!genResp.ok && genResp.status === 404) {
-              activeModel = "gemini-2.5-flash-lite";
+
+            // If quota reached (429 or RESOURCE_EXHAUSTED) and not already on flash-lite, fallback!
+            if (genResp.status === 429 && !activeModel.includes("lite")) {
+              setProgress(`⚠️ Quota limit on ${activeModel}. Automatically falling back to Gemini Flash-Lite...`, chunkProgress);
+              activeModel = "gemini-flash-lite-latest";
               genResp = await requestGeminiTranscription(activeModel);
+              if (!genResp.ok && genResp.status === 404) {
+                activeModel = "gemini-3.5-flash-lite";
+                genResp = await requestGeminiTranscription(activeModel);
+              }
+              if (!genResp.ok && genResp.status === 404) {
+                activeModel = "gemini-2.5-flash-lite";
+                genResp = await requestGeminiTranscription(activeModel);
+              }
+            }
+
+            if (!genResp.ok) {
+              const errText = await genResp.text();
+              throw new Error(`Gemini Transcription Error on file ${fileNum}${chunk.totalChunks > 1 ? ` chunk ${chunk.chunkIndex}` : ''} (${currentFile.name}) [${activeModel}]: ${errText}`);
+            }
+
+            const genData = await genResp.json();
+            const partTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
+            if (!partTranscript) {
+              const finishReason = genData.candidates?.[0]?.finishReason || "Unknown";
+              throw new Error(`No transcript generated for file ${fileNum}${chunk.totalChunks > 1 ? ` chunk ${chunk.chunkIndex}` : ''} (Finish reason: ${finishReason}).`);
+            }
+
+            const cleanedChunk = cleanChunkTranscript(partTranscript);
+            const shiftedChunk = shiftTimestampsInText(cleanedChunk, chunk.startSec);
+            fileChunkTranscripts.push(shiftedChunk);
+
+            if (cIdx < numChunks - 1) {
+              await new Promise(r => setTimeout(r, 1000));
             }
           }
 
-          if (!genResp.ok) {
-            const errText = await genResp.text();
-            throw new Error(`Gemini Transcription Error on file ${fileNum} (${currentFile.name}) [${activeModel}]: ${errText}`);
-          }
-
-          const genData = await genResp.json();
-          const partTranscript = genData.candidates?.[0]?.content?.parts?.[0]?.text || "";
-          if (!partTranscript) {
-            const finishReason = genData.candidates?.[0]?.finishReason || "Unknown";
-            throw new Error(`No transcript generated for file ${fileNum} (Finish reason: ${finishReason}).`);
-          }
-
+          const fileTranscript = fileChunkTranscripts.join("\n\n");
           if (totalFiles > 1) {
-            fullTranscripts.push(`--- [Part ${fileNum} of ${totalFiles}: ${currentFile.name}] ---\n\n${partTranscript}`);
+            fullTranscripts.push(`--- [Part ${fileNum} of ${totalFiles}: ${currentFile.name}] ---\n\n${fileTranscript}`);
           } else {
-            fullTranscripts.push(partTranscript);
+            fullTranscripts.push(fileTranscript);
           }
 
           // Delay between multiple files to respect Gemini API rate limits

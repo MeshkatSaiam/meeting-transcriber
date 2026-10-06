@@ -1542,14 +1542,20 @@ class TranscriberGUI(BoxLayout):
 
         # Checkboxes and Live Status
         opts_row = BoxLayout(orientation="horizontal", spacing=4, size_hint_y=None, height=22)
+        self.guess_speakers_chk = CheckBox(active=True, size_hint_x=None, width=18)
+        guess_spk_lbl = Label(text="Smart Guessing", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=82, halign="left", valign="middle")
+        guess_spk_lbl.bind(size=guess_spk_lbl.setter("text_size"))
+
         self.auto_rename_chk = CheckBox(active=False, size_hint_x=None, width=18)
-        auto_ren_lbl = Label(text="Auto Rename", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=78, halign="left", valign="middle")
+        auto_ren_lbl = Label(text="Auto Rename", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=72, halign="left", valign="middle")
         auto_ren_lbl.bind(size=auto_ren_lbl.setter("text_size"))
 
         self.drive_chk = CheckBox(active=False, size_hint_x=None, width=18)
-        drive_lbl = Label(text="Auto Drive Upload", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=105, halign="left", valign="middle")
+        drive_lbl = Label(text="Drive Sync", color=get_color_from_hex("#D1D5DB"), font_size="10sp", size_hint_x=None, width=62, halign="left", valign="middle")
         drive_lbl.bind(size=drive_lbl.setter("text_size"))
 
+        opts_row.add_widget(self.guess_speakers_chk)
+        opts_row.add_widget(guess_spk_lbl)
         opts_row.add_widget(self.auto_rename_chk)
         opts_row.add_widget(auto_ren_lbl)
         opts_row.add_widget(self.drive_chk)
@@ -4245,6 +4251,7 @@ class TranscriberGUI(BoxLayout):
 
         model_name = self.model_spinner.text.replace("Model: ", "").strip() or DEFAULT_MODEL
         auto_rename_enabled = bool(self.auto_rename_chk.active)
+        guess_speakers_enabled = bool(self.guess_speakers_chk.active)
         
         # Connect active voice samples from Sample Library
         selected_samples = self.get_active_reference_samples()
@@ -4298,13 +4305,14 @@ class TranscriberGUI(BoxLayout):
 
         mode_desc = " [Auto-Rename Active]" if auto_rename_enabled else ""
         ref_desc = f" [{len(selected_samples)} Voice Sample(s)]" if selected_samples else ""
-        self.live_action_lbl.text = f"Processing '{display_title}' with {model_name}...{mode_desc}{ref_desc}"
+        guess_desc = " [Smart Guessing]" if guess_speakers_enabled else ""
+        self.live_action_lbl.text = f"Processing '{display_title}' with {model_name}...{mode_desc}{ref_desc}{guess_desc}"
         self.live_action_lbl.color = get_color_from_hex("#38BDF8")
-        self.display_placeholder_message(f"=== Processing Audio: {display_title} ===\nSplitting audio chunks & sending to Gemini {model_name}...\nVoice samples active: {len(selected_samples)}\nClick 'Stop / Cancel' at any time to abort cleanly.\nLive progress is shown above.")
+        self.display_placeholder_message(f"=== Processing Audio: {display_title} ===\nSplitting audio chunks & sending to Gemini {model_name}...\nVoice samples active: {len(selected_samples)}\nSmart speaker guessing: {'On' if guess_speakers_enabled else 'Off'}\nClick 'Stop / Cancel' at any time to abort cleanly.\nLive progress is shown above.")
 
         threading.Thread(
             target=self._transcription_worker,
-            args=(audio_files, model_name, chunk_arg, auto_rename_enabled, selected_samples),
+            args=(audio_files, model_name, chunk_arg, auto_rename_enabled, selected_samples, guess_speakers_enabled),
             daemon=True
         ).start()
 
@@ -4331,7 +4339,7 @@ class TranscriberGUI(BoxLayout):
         self.display_placeholder_message("=== Transcription Cancelled ===\nProcess was cleanly interrupted by user.\nReady to start a new session.")
         print("[Transcription] Cancelled cleanly without errors.", flush=True)
 
-    def _transcription_worker(self, audio_files: list[Path] | Path, model_name: str, chunk_arg, auto_rename: bool, reference_samples: list[dict]):
+    def _transcription_worker(self, audio_files: list[Path] | Path, model_name: str, chunk_arg, auto_rename: bool, reference_samples: list[dict], guess_speakers: bool = True):
         try:
             if isinstance(audio_files, (Path, str)):
                 audio_files = [Path(audio_files)]
@@ -4347,6 +4355,7 @@ class TranscriberGUI(BoxLayout):
                     chunk_minutes=chunk_arg,
                     auto_save=False,
                     reference_samples=reference_samples,
+                    guess_speakers=guess_speakers,
                     log_callback=self.log_status,
                     status_callback=self.update_live_status,
                     cancel_event=self.cancel_event,
@@ -4505,6 +4514,7 @@ class TranscriberGUI(BoxLayout):
                         chunk_minutes=chunk_arg,
                         auto_save=False,
                         reference_samples=reference_samples,
+                        guess_speakers=guess_speakers,
                         log_callback=_b_log,
                         status_callback=_b_status,
                         cancel_event=self.cancel_event,

@@ -145,6 +145,13 @@ Strict Transcription, Language Fidelity & Formatting Rules:
    - Output the transcript in chronological order.
 """
 
+SPEAKER_GUESSING_PROMPT = """CRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:
+1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').
+2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').
+3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.
+4. Maintain consistent speaker identification across the entire conversation."""
+
+
 VOICE_REFERENCE_PROMPT = """You will be given REFERENCE audio clips, each labeled with a real person's name, followed by a MAIN recording to transcribe.
 
 CRITICAL RULES — READ CAREFULLY:
@@ -1113,7 +1120,7 @@ def transcribe_chunk_with_fallback(
 
     raise RuntimeError(f"Chunk {chunk_index} failed across all candidate models ({', '.join(models)}). Last error: {last_error}")
 
-def process_chunk(chunk_info: tuple[int, float, float, Path], api_key: str, models: list[str], reference_samples: list[dict] | None = None, cancel_event = None, api_call_callback = None) -> dict:
+def process_chunk(chunk_info: tuple[int, float, float, Path], api_key: str, models: list[str], reference_samples: list[dict] | None = None, guess_speakers: bool = True, cancel_event = None, api_call_callback = None) -> dict:
     if cancel_event and cancel_event.is_set():
         raise TranscriptionCancelledException("Transcription cancelled by user.")
     chunk_index, start_sec, end_sec, chunk_file = chunk_info
@@ -1169,9 +1176,13 @@ def process_chunk(chunk_info: tuple[int, float, float, Path], api_key: str, mode
             )
             target_upload_file = combined_chunk_file
             prompt = build_deterministic_reference_prompt(total_prefix_duration, tracked_ranges)
+            if guess_speakers:
+                prompt += f"\n\n{SPEAKER_GUESSING_PROMPT}"
             print(f"\n{'='*60}\n[CHUNK {chunk_index} PROMPT SENT TO GEMINI (VOICE SAMPLES: {len(active_refs)})]\n{'='*60}\n{prompt}\n{'='*60}\n", flush=True)
         else:
             prompt = TRANSCRIPTION_PROMPT
+            if guess_speakers:
+                prompt += f"\n\n{SPEAKER_GUESSING_PROMPT}"
             print(f"\n{'='*60}\n[CHUNK {chunk_index} PROMPT SENT TO GEMINI (STANDARD)]\n{'='*60}\n{prompt}\n{'='*60}\n", flush=True)
 
         if cancel_event and cancel_event.is_set():
@@ -1594,6 +1605,7 @@ def run_transcription_pipeline(
     max_workers: int | None = None,
     auto_save: bool = False,
     reference_samples: list[dict] | None = None,
+    guess_speakers: bool = True,
     log_callback = None,
     status_callback = None,
     cancel_event = None,
@@ -1656,13 +1668,16 @@ def run_transcription_pipeline(
         last_err = None
         final_merged_transcript = ""
         used_model = model
+        direct_prompt = TRANSCRIPTION_PROMPT
+        if guess_speakers:
+            direct_prompt += f"\n\n{SPEAKER_GUESSING_PROMPT}"
         for m in models_to_try:
             try:
                 if api_call_callback:
                     api_call_callback()
                 resp = client.models.generate_content(
                     model=m,
-                    contents=[uploaded, TRANSCRIPTION_PROMPT]
+                    contents=[uploaded, direct_prompt]
                 )
                 final_merged_transcript = resp.text.strip()
                 used_model = m
@@ -1762,7 +1777,7 @@ def run_transcription_pipeline(
     workers = max_workers or min(total_chunks, 8)
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
         future_map = {
-            executor.submit(process_chunk, chunk_info, api_key, models_to_try, reference_samples, cancel_event, api_call_callback): chunk_info[0]
+            executor.submit(process_chunk, chunk_info, api_key, models_to_try, reference_samples, guess_speakers, cancel_event, api_call_callback): chunk_info[0]
             for chunk_info in chunk_items
         }
 
