@@ -589,7 +589,15 @@
         </div>
 
         <!-- Mic Recording for Sample -->
-        <div id="section-enroll-mic" class="border border-slate-700 bg-slate-900/50 rounded-xl p-4 text-center space-y-2">
+        <div id="section-enroll-mic" class="border border-slate-700 bg-slate-900/50 rounded-xl p-4 text-center space-y-2.5">
+          <div class="bg-slate-800/90 border border-sky-500/30 rounded-lg p-2.5 text-left text-[11px] text-slate-300 space-y-1">
+            <div class="font-semibold text-sky-400 text-[10px] uppercase tracking-wider flex items-center space-x-1">
+              <span>💡</span>
+              <span>Suggested Speech to Read:</span>
+            </div>
+            <p class="italic text-slate-200">"Hello, my name is <span class="text-sky-300 font-semibold">[Name]</span>, and I am recording my voice sample."</p>
+            <p class="italic text-slate-300">"হ্যালো, আমি <span class="text-sky-300 font-semibold">[নাম]</span>, আজকের মিটিংয়ের জন্য আমার ভয়েস স্যাম্পল রেকর্ড করছি।"</p>
+          </div>
           <div id="enroll-pulse" class="w-12 h-12 rounded-full bg-slate-700 mx-auto flex items-center justify-center text-xl transition">
             🎙️
           </div>
@@ -2432,13 +2440,26 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             // Build Transcription Prompt
             let promptToUse = TRANSCRIPTION_PROMPT;
 
-            // Contextual Speaker Guessing Instruction
+            // Contextual Speaker Guessing Instruction (Role Deduction & Numbered Fallback)
             if (guessSpeakers) {
-              promptToUse += `\n\nCRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:\n` +
-                `1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').\n` +
-                `2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').\n` +
-                `3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.\n` +
-                `4. Maintain consistent speaker identification across the entire conversation.\n`;
+              promptToUse += `\n\nCRITICAL CONTEXTUAL SPEAKER DIARIZATION & ROLE IDENTIFICATION:\n` +
+                `1. Strict Rule on Personal Names:\n` +
+                `   - NEVER guess, invent, or hallucinate random personal names. Only use a person's real name if they explicitly introduce themselves (e.g., 'Hi, I am Meshkat') or match an enrolled voice profile.\n` +
+                `2. Contextual Professional Role Identification:\n` +
+                `   - When a speaker's specific personal name is not explicitly confirmed, deduce their professional ROLE from conversational context, responsibilities, and speech content, and label them accordingly:\n` +
+                `     • "Client" or "Customer" (the person asking for requirements, project scope, or giving feedback)\n` +
+                `     • "Lead Engineer", "Software Engineer", "Hardware Engineer", or "DevOps Engineer" (technical discussion of code, bugs, architecture, circuits, or deployment)\n` +
+                `     • "Project Manager", "Product Manager", or "Team Lead" (managing tasks, sprints, timelines, or deliverables)\n` +
+                `     • "UI/UX Designer" or "Designer" (discussing Figma, layouts, wireframes, or user experience)\n` +
+                `     • "Interviewer" or "Candidate" (in interview and recruitment discussions)\n` +
+                `     • "Presenter", "Host", or "Moderator" (facilitating the meeting or giving presentations)\n` +
+                `     • "Student", "Teacher", or "Instructor" (in academic, training, or workshop contexts)\n` +
+                `     • "Consultant", "Analyst", or "Stakeholder"\n` +
+                `     (e.g., '[00:15] Client: ...', '[00:45] Lead Engineer: ...', '[01:10] Project Manager: ...')\n` +
+                `3. Numbered Fallback:\n` +
+                `   - If NEITHER an enrolled name nor a clear professional role can be determined, strictly label them as numbered speakers:\n` +
+                `     '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', '[MM:SS] Speaker 3:', etc.\n` +
+                `   - Maintain the exact same speaker numbering consistently across the entire conversation. Do NOT switch or guess arbitrary personal names.\n`;
             }
 
             // Voice Sample Profile Stitching (if enrolled)

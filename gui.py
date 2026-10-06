@@ -979,7 +979,7 @@ def prompt_voice_sample_metadata_dialog(
     root.resizable(False, False)
     root.configure(bg="#1E1E24")
     
-    win_w, win_h = 440, 260
+    win_w, win_h = 480, 360
     sw = root.winfo_screenwidth()
     sh = root.winfo_screenheight()
     x = (sw - win_w) // 2
@@ -995,10 +995,31 @@ def prompt_voice_sample_metadata_dialog(
         font=("Segoe UI", 10, "bold"),
         fg="#F3F4F6",
         bg="#1E1E24",
-        wraplength=400,
+        wraplength=440,
         justify="left"
     )
-    header_lbl.pack(anchor="w", pady=(0, 10))
+    header_lbl.pack(anchor="w", pady=(0, 8))
+
+    suggest_frame = tk.Frame(pad_frame, bg="#111827", bd=1, relief="solid", padx=10, pady=8)
+    suggest_frame.pack(fill="x", pady=(0, 10))
+    suggest_title = tk.Label(
+        suggest_frame,
+        text="Suggested Speech to Speak for Recording:",
+        font=("Segoe UI", 8, "bold"),
+        fg="#38BDF8",
+        bg="#111827"
+    )
+    suggest_title.pack(anchor="w")
+    suggest_text = tk.Label(
+        suggest_frame,
+        text='EN: "Hello, my name is [Name], and I am recording my voice sample."\n'
+             'BN: "হ্যালো, আমি [নাম], আজকের মিটিংয়ের জন্য আমার ভয়েস স্যাম্পল রেকর্ড করছি।"',
+        font=("Segoe UI", 8),
+        fg="#9CA3AF",
+        bg="#111827",
+        justify="left"
+    )
+    suggest_text.pack(anchor="w", pady=(3, 0))
     
     name_lbl = tk.Label(
         pad_frame,
@@ -1643,8 +1664,8 @@ class TranscriberGUI(BoxLayout):
         self.progress_bar = ProgressBar(max=1.0, value=0.0, size_hint_y=None, height=4)
         self.transcribe_view.add_widget(self.progress_bar)
 
-        # D. Waveform Studio Card with Floating Micro-Toolbar (Height increased to 150)
-        self.main_waveform_card = SurfaceCard(orientation="vertical", size_hint_y=None, height=150, padding=[10, 8, 10, 8], spacing=4)
+        # D. Waveform Studio Card with Floating Micro-Toolbar (Spacious full-height layout)
+        self.main_waveform_card = SurfaceCard(orientation="vertical", size_hint=(1, 1), padding=[10, 8, 10, 8], spacing=4)
         
         wf_header = BoxLayout(orientation="horizontal", size_hint_y=None, height=16, spacing=8)
         self.main_wf_title_lbl = Label(
@@ -1680,7 +1701,7 @@ class TranscriberGUI(BoxLayout):
             orientation="horizontal",
             size_hint=(None, None),
             size=(250, 30),
-            pos_hint={'center_x': 0.5, 'center_y': 0.28},
+            pos_hint={'center_x': 0.5, 'y': 0.08},
             spacing=4,
             padding=[6, 2, 6, 2]
         )
@@ -1739,33 +1760,7 @@ class TranscriberGUI(BoxLayout):
         self.main_waveform_card.add_widget(wf_container)
         self.transcribe_view.add_widget(self.main_waveform_card)
 
-        # E. Live Diarized Transcript Display (Framed in an elevated SurfaceCard)
-        self.transcript_card = SurfaceCard(orientation="vertical", size_hint=(1, 1), padding=[12, 10, 12, 10], spacing=6)
-
-        transcript_hdr = BoxLayout(orientation="horizontal", size_hint_y=None, height=20, spacing=8)
-        self.transcript_title_lbl = Label(
-            text="Live Diarized Transcript & Notes",
-            font_size="12sp",
-            bold=True,
-            color=get_color_from_hex("#F9FAFB"),
-            halign="left",
-            valign="middle"
-        )
-        self.transcript_title_lbl.bind(size=self.transcript_title_lbl.setter("text_size"))
-
-        self.transcript_meta_lbl = Label(
-            text="Verbatim Language Fidelity (বাংলা & English) | Automatic Speaker Turns",
-            font_size="11sp",
-            color=get_color_from_hex("#9CA3AF"),
-            halign="right",
-            valign="middle"
-        )
-        self.transcript_meta_lbl.bind(size=self.transcript_meta_lbl.setter("text_size"))
-
-        transcript_hdr.add_widget(self.transcript_title_lbl)
-        transcript_hdr.add_widget(self.transcript_meta_lbl)
-        self.transcript_card.add_widget(transcript_hdr)
-
+        # Kept in memory for background threads and status updates without occupying screen space
         self.display_scroll = ScrollView(
             size_hint=(1, 1),
             do_scroll_x=False,
@@ -1782,16 +1777,6 @@ class TranscriberGUI(BoxLayout):
         self.transcript_display_layout.bind(minimum_height=self.transcript_display_layout.setter("height"))
         self.display_scroll.bind(width=lambda s, w: setattr(self.transcript_display_layout, "width", w))
         self.display_scroll.add_widget(self.transcript_display_layout)
-        self.transcript_card.add_widget(self.display_scroll)
-        self.transcribe_view.add_widget(self.transcript_card)
-
-        self.display_placeholder_message(
-            "✦ Welcome to Bilingual Meeting Transcriber ✦\n\n"
-            "• Step 1: Select audio/video file(s) or record live speech.\n"
-            "• Step 2: Choose your Gemini AI model and chunking mode.\n"
-            "• Step 3: Click 'Start Transcription' to begin.\n\n"
-            "Your verbatim diarized transcript will stream here in real-time."
-        )
 
         # F. Action Dock (Fixed Bottom Anchor with Elevated Accent Styling)
         self.actions_bar = SurfaceCard(orientation="horizontal", size_hint_y=None, height=46, padding=[8, 6, 8, 6], spacing=8)

@@ -145,11 +145,24 @@ Strict Transcription, Language Fidelity & Formatting Rules:
    - Output the transcript in chronological order.
 """
 
-SPEAKER_GUESSING_PROMPT = """CRITICAL CONTEXTUAL SPEAKER IDENTIFICATION & NAME GUESSING:
-1. Carefully analyze all conversational cues, introductions, greetings, and moments where speakers address one another by name (e.g. 'Hey Meshkat', 'Good morning Sarah', 'Thanks Dave', 'What do you think, Manager?').
-2. Deduce each speaker's real name or role whenever possible from these dialog clues and label their speaker turns accordingly (e.g., '[00:15] Meshkat:', '[00:45] Sarah:', '[01:10] Project Lead:').
-3. If a speaker's specific name cannot be deduced with confidence, label them consistently as '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', etc.
-4. Maintain consistent speaker identification across the entire conversation."""
+SPEAKER_GUESSING_PROMPT = """CRITICAL CONTEXTUAL SPEAKER DIARIZATION & ROLE IDENTIFICATION:
+1. Strict Rule on Personal Names:
+   - NEVER guess, invent, or hallucinate random personal names. Only use a person's real name if they explicitly introduce themselves (e.g., 'Hi, I am Meshkat') or match an enrolled voice profile.
+2. Contextual Professional Role Identification:
+   - When a speaker's specific personal name is not explicitly confirmed, deduce their professional ROLE from conversational context, responsibilities, and speech content, and label them accordingly:
+     • "Client" or "Customer" (the person asking for requirements, project scope, or giving feedback)
+     • "Lead Engineer", "Software Engineer", "Hardware Engineer", or "DevOps Engineer" (technical discussion of code, bugs, architecture, circuits, or deployment)
+     • "Project Manager", "Product Manager", or "Team Lead" (managing tasks, sprints, timelines, or deliverables)
+     • "UI/UX Designer" or "Designer" (discussing Figma, layouts, wireframes, or user experience)
+     • "Interviewer" or "Candidate" (in interview and recruitment discussions)
+     • "Presenter", "Host", or "Moderator" (facilitating the meeting or giving presentations)
+     • "Student", "Teacher", or "Instructor" (in academic, training, or workshop contexts)
+     • "Consultant", "Analyst", or "Stakeholder"
+     (e.g., '[00:15] Client: ...', '[00:45] Lead Engineer: ...', '[01:10] Project Manager: ...')
+3. Numbered Fallback:
+   - If NEITHER an enrolled name nor a clear professional role can be determined, strictly label them as numbered speakers:
+     '[MM:SS] Speaker 1:', '[MM:SS] Speaker 2:', '[MM:SS] Speaker 3:', etc.
+   - Maintain the exact same speaker numbering consistently across the entire conversation. Do NOT switch or guess arbitrary personal names."""
 
 
 VOICE_REFERENCE_PROMPT = """You will be given REFERENCE audio clips, each labeled with a real person's name, followed by a MAIN recording to transcribe.
