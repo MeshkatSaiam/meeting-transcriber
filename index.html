@@ -504,6 +504,24 @@
               <option value="disabled">Disabled (Single file, no chunking)</option>
             </select>
           </div>
+
+          <!-- Parallel Chunk Concurrency -->
+          <div class="pt-2 border-t border-slate-700/50 space-y-1.5">
+            <div class="flex items-center justify-between">
+              <div>
+                <div class="text-xs font-medium text-slate-200">Parallel Chunk Concurrency</div>
+                <div class="text-[11px] text-slate-400">Transcribe audio chunks simultaneously to multiply processing speed</div>
+              </div>
+              <span class="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono">High Speed 🚀</span>
+            </div>
+            <select id="select-chunk-concurrency" class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-sky-400">
+              <option value="all" selected>🚀 Maximum Parallel (All Chunks at Once - Fastest)</option>
+              <option value="4">⚡ 4 Chunks in Parallel (High Concurrency)</option>
+              <option value="3">⚡ 3 Chunks in Parallel (Balanced Concurrency)</option>
+              <option value="2">⚡ 2 Chunks in Parallel (Conservative)</option>
+              <option value="1">🐢 Sequential (1 Chunk at a time - Safe Mode)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -674,6 +692,16 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
     const inputApiKey = document.getElementById("input-api-key");
     const savedKey = localStorage.getItem("gemini_api_key") || "";
     inputApiKey.value = savedKey;
+
+    // Load & Persist Concurrency Setting
+    const selConcurrency = document.getElementById("select-chunk-concurrency");
+    if (selConcurrency) {
+      const savedConc = localStorage.getItem("chunk_concurrency");
+      if (savedConc) selConcurrency.value = savedConc;
+      selConcurrency.addEventListener("change", () => {
+        localStorage.setItem("chunk_concurrency", selConcurrency.value);
+      });
+    }
 
     // Tab Navigation
     function switchTab(tabId) {
@@ -2384,17 +2412,15 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
             audioProcessCache.set(cacheKey, { chunks: fileChunks });
           }
 
-          // 2. Sequential Chunk Transcription with Dynamic Timestamp Synchronization
-          const fileChunkTranscripts = [];
-          const numChunks = fileChunks.length;
+          // 2. Parallel Chunk Transcription with Dynamic Timestamp Synchronization
+          const fileChunkTranscripts = new Array(numChunks);
+          let completedChunksCount = 0;
+          const concurrencySetting = document.getElementById("select-chunk-concurrency")?.value || "all";
+          const maxConcurrency = concurrencySetting === "all" ? numChunks : Math.max(1, parseInt(concurrencySetting, 10) || numChunks);
 
-          for (let cIdx = 0; cIdx < numChunks; cIdx++) {
+          async function transcribeSingleChunk(cIdx) {
             const chunk = fileChunks[cIdx];
-            const chunkFraction = (cIdx / numChunks);
-            const chunkProgress = basePct + Math.round(stepWeight * 0.55) + Math.round(chunkFraction * stepWeight * 0.40);
             const chunkTimeLabel = chunk.totalChunks > 1 ? ` (${formatTimestampSeconds(chunk.startSec)}–${formatTimestampSeconds(chunk.endSec)})` : "";
-
-            setProgress(`File ${fileNum}/${totalFiles}: Transcribing ${chunk.totalChunks > 1 ? `chunk ${chunk.chunkIndex}/${chunk.totalChunks}${chunkTimeLabel}` : 'audio'} with ${activeModel}...`, chunkProgress);
 
             const audioPart = {
               inlineData: {
@@ -2441,38 +2467,43 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
               });
             }
 
-            let genResp = await requestGeminiTranscription(activeModel);
+            let chunkModel = activeModel;
+            let genResp = await requestGeminiTranscription(chunkModel);
 
             // If initial model is not enabled for this key (404), cascade gracefully
             if (!genResp.ok && genResp.status === 404) {
-              let alt = activeModel;
-              if (activeModel.includes("flash") && !activeModel.includes("lite")) alt = "gemini-2.5-flash";
-              else if (activeModel.includes("pro")) alt = "gemini-2.5-pro";
-              else if (activeModel.includes("lite")) alt = "gemini-2.5-flash-lite";
-              if (alt !== activeModel) {
+              let alt = chunkModel;
+              if (chunkModel.includes("flash") && !chunkModel.includes("lite")) alt = "gemini-2.5-flash";
+              else if (chunkModel.includes("pro")) alt = "gemini-2.5-pro";
+              else if (chunkModel.includes("lite")) alt = "gemini-2.5-flash-lite";
+              if (alt !== chunkModel) {
+                chunkModel = alt;
                 activeModel = alt;
-                genResp = await requestGeminiTranscription(activeModel);
+                genResp = await requestGeminiTranscription(chunkModel);
               }
             }
 
-            // If quota reached (429 or RESOURCE_EXHAUSTED) and not already on flash-lite, fallback!
-            if (genResp.status === 429 && !activeModel.includes("lite")) {
-              setProgress(`⚠️ Quota limit on ${activeModel}. Automatically falling back to Gemini Flash-Lite...`, chunkProgress);
-              activeModel = "gemini-flash-lite-latest";
-              genResp = await requestGeminiTranscription(activeModel);
+            // If quota reached (429 or RESOURCE_EXHAUSTED) and not already on flash-lite, fallback with jitter!
+            if (genResp.status === 429 && !chunkModel.includes("lite")) {
+              await new Promise(r => setTimeout(r, 800 + Math.random() * 1200));
+              chunkModel = "gemini-flash-lite-latest";
+              activeModel = chunkModel;
+              genResp = await requestGeminiTranscription(chunkModel);
               if (!genResp.ok && genResp.status === 404) {
-                activeModel = "gemini-3.5-flash-lite";
-                genResp = await requestGeminiTranscription(activeModel);
+                chunkModel = "gemini-3.5-flash-lite";
+                activeModel = chunkModel;
+                genResp = await requestGeminiTranscription(chunkModel);
               }
               if (!genResp.ok && genResp.status === 404) {
-                activeModel = "gemini-2.5-flash-lite";
-                genResp = await requestGeminiTranscription(activeModel);
+                chunkModel = "gemini-2.5-flash-lite";
+                activeModel = chunkModel;
+                genResp = await requestGeminiTranscription(chunkModel);
               }
             }
 
             if (!genResp.ok) {
               const errText = await genResp.text();
-              throw new Error(`Gemini Transcription Error on file ${fileNum}${chunk.totalChunks > 1 ? ` chunk ${chunk.chunkIndex}` : ''} (${currentFile.name}) [${activeModel}]: ${errText}`);
+              throw new Error(`Gemini Transcription Error on file ${fileNum}${chunk.totalChunks > 1 ? ` chunk ${chunk.chunkIndex}` : ''} (${currentFile.name}) [${chunkModel}]: ${errText}`);
             }
 
             const genData = await genResp.json();
@@ -2484,11 +2515,31 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
             const cleanedChunk = cleanChunkTranscript(partTranscript);
             const shiftedChunk = shiftTimestampsInText(cleanedChunk, chunk.startSec);
-            fileChunkTranscripts.push(shiftedChunk);
+            fileChunkTranscripts[cIdx] = shiftedChunk;
 
-            if (cIdx < numChunks - 1) {
-              await new Promise(r => setTimeout(r, 1000));
+            completedChunksCount++;
+            const chunkProgress = basePct + Math.round(stepWeight * 0.55) + Math.round((completedChunksCount / numChunks) * stepWeight * 0.40);
+            setProgress(`File ${fileNum}/${totalFiles}: Transcribed ${completedChunksCount}/${numChunks} chunk(s) (Parallel 🚀)...`, chunkProgress);
+          }
+
+          if (numChunks === 1) {
+            setProgress(`File ${fileNum}/${totalFiles}: Transcribing audio with ${activeModel}...`, basePct + Math.round(stepWeight * 0.60));
+            await transcribeSingleChunk(0);
+          } else if (maxConcurrency >= numChunks) {
+            setProgress(`File ${fileNum}/${totalFiles}: Transcribing all ${numChunks} chunks in parallel (Turbo Mode 🚀)...`, basePct + Math.round(stepWeight * 0.55));
+            await Promise.all(Array.from({ length: numChunks }, (_, idx) => transcribeSingleChunk(idx)));
+          } else {
+            setProgress(`File ${fileNum}/${totalFiles}: Transcribing ${numChunks} chunks (${maxConcurrency} parallel workers ⚡)...`, basePct + Math.round(stepWeight * 0.55));
+            const chunkIndices = Array.from({ length: numChunks }, (_, idx) => idx);
+            let nextIndex = 0;
+            async function poolWorker() {
+              while (nextIndex < chunkIndices.length) {
+                const idx = nextIndex++;
+                await transcribeSingleChunk(idx);
+              }
             }
+            const workers = Array.from({ length: Math.min(maxConcurrency, numChunks) }, () => poolWorker());
+            await Promise.all(workers);
           }
 
           const fileTranscript = fileChunkTranscripts.join("\n\n");
