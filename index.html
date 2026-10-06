@@ -2275,6 +2275,7 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
 
       try {
         let fullTranscripts = [];
+        let activeModel = model;
         const totalFiles = selectedAudioFiles.length;
         const activeVoiceSamples = enrolledVoiceSamples.filter(s => s.active !== false);
 
@@ -2327,7 +2328,6 @@ Language Rule: Preserve original context and names. For Bengali discussions, pre
           // 2. Sequential Chunk Transcription with Dynamic Timestamp Synchronization
           const fileChunkTranscripts = [];
           const numChunks = fileChunks.length;
-          let activeModel = model;
 
           for (let cIdx = 0; cIdx < numChunks; cIdx++) {
             const chunk = fileChunks[cIdx];
